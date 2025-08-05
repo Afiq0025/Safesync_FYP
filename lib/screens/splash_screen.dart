@@ -18,42 +18,48 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.3),
-                    spreadRadius: 5,
-                    blurRadius: 10,
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: screenWidth * 0.3,
+                height: screenWidth * 0.3,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.3),
+                        spreadRadius: 5,
+                        blurRadius: 10,
+                      ),
+                    ],
                   ),
-                ],
+                  child: const Icon(
+                    Icons.security,
+                    size: 60,
+                    color: Color(0xFFFF5A5A),
+                  ),
+                ),
               ),
-              child: const Icon(
-                Icons.security,
-                size: 60,
-                color: Color(0xFFFF5A5A),
+              SizedBox(height: screenHeight * 0.04),
+              const Text(
+                'SafeSync',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFFF5A5A),
+                ),
               ),
-            ),
-            const SizedBox(height: 30),
-            const Text(
-              'SafeSync',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFFFF5A5A),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'screens/auth/login_screen.dart';
+import 'screens/auth/signup_screen.dart';
+import 'screens/home/smartwatch_detail.dart';
+import 'screens/settings/recording_settings.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,8 +32,12 @@ class SafeSyncApp extends StatelessWidget {
       ),
       initialRoute: '/',
       routes: {
+        '/login': (context) => const LoginScreen(),
+        '/signup': (context) => const SignupScreen(),
         '/': (context) => const SplashScreen(),
         '/main': (context) => const MainScreen(),
+        '/smartwatch': (context) => const SmartwatchDetailScreen(),
+        '/recording-settings': (context) => const RecordingSettingsScreen(),
       },
     );
   }
@@ -53,7 +61,7 @@ class _SplashScreenState extends State<SplashScreen> {
     try {
       await Future.delayed(const Duration(seconds: 3));
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/main');
+        Navigator.pushReplacementNamed(context, '/login');
       }
     } catch (e) {
       print('Initialization error: $e');
@@ -255,15 +263,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   const SizedBox(height: 100),
                   Column(
                     children: [
-                      Container(
-                        width: 45,
-                        height: 45,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(22.5),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pushNamed(context, '/smartwatch');
+                        },
+                        child: Container(
+                          width: 45,
+                          height: 45,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(22.5),
+                          ),
+                          child: Image.asset('assets/images/watch.jpg',
+                              width: 24, height: 24),
                         ),
-                        child: Image.asset('assets/images/watch.jpg',
-                            width: 24, height: 24),
                       ),
                     ],
                   ),
@@ -274,10 +287,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
               // Heart rate display with animated icon
               Lottie.asset(
-                'assets/images/heartbeat.json',  // Your JSON file path
+                'assets/images/heartbeat.json', // Your JSON file path
                 width: 100,
                 height: 100,
-                repeat: true,  // Loop the animation
+                repeat: true, // Loop the animation
                 animate: true,
               ),
 
@@ -309,6 +322,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   _buildActivityIndicator(
                     Icons.emergency_recording_rounded,
                     "Automatic\nRecording",
+                    onTap: () {
+                      Navigator.pushNamed(context, '/recording-settings');
+                    },
                   ),
                   _buildActivityIndicator(
                     Icons.watch_rounded,
@@ -385,8 +401,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildActivityIndicator(IconData icon, String label) {
-    return Column(
+  Widget _buildActivityIndicator(IconData icon, String label, {VoidCallback? onTap}) {
+    Widget content = Column(
       children: [
         Container(
           width: 60,
@@ -412,6 +428,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       ],
     );
+    
+    if (onTap != null) {
+      return GestureDetector(
+        onTap: onTap,
+        child: content,
+      );
+    }
+    
+    return content;
   }
 
   Widget _buildFeatureButton(

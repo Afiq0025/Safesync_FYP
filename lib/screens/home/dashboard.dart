@@ -17,16 +17,17 @@ class DashboardScreen extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(20),
           child: Column(
+            // DO NOT mark this Column as const because it contains GestureDetector
             children: [
-              const Row(
+              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  CircleAvatar(
+                  const CircleAvatar(
                     backgroundColor: Colors.white,
                     child: Icon(Icons.person, color: Colors.grey),
                   ),
                   Row(
-                    children: [
+                    children: const [
                       CircleAvatar(
                         backgroundColor: Colors.white,
                         radius: 20,
@@ -72,6 +73,20 @@ class DashboardScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 40),
+              // Add Smartwatch image with tap navigation
+              GestureDetector(
+                onTap: () {
+                  print('Smartwatch image tapped');
+                  Navigator.pushNamed(context, '/smartwatch');
+                },
+                child: Image.asset(
+                  'assets/images/watch.jpg',
+                  width: 160,
+                  height: 160,
+                  fit: BoxFit.contain,
+                ),
+              ),
+              const SizedBox(height: 20),
               // Feature Icons Row
               const Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,

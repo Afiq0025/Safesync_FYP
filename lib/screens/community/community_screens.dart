@@ -12,6 +12,8 @@ class _CommunityScreenState extends State<CommunityScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -22,7 +24,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(screenWidth * 0.05),
           child: Column(
             children: [
               const Row(
@@ -34,9 +36,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: screenHeight * 0.025),
               Container(
-                padding: const EdgeInsets.all(5),
+                padding: EdgeInsets.all(screenWidth * 0.012),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(25),
@@ -49,10 +51,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: screenHeight * 0.025),
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.all(20),
+                  padding: EdgeInsets.all(screenWidth * 0.05),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
@@ -62,9 +64,10 @@ class _CommunityScreenState extends State<CommunityScreen> {
               ),
               if (selectedTab == 2)
                 Container(
-                  margin: const EdgeInsets.only(top: 15),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+                  margin: EdgeInsets.only(top: screenHeight * 0.015),
+                  padding: EdgeInsets.symmetric(
+                      horizontal: screenWidth * 0.05,
+                      vertical: screenHeight * 0.018),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(25),
