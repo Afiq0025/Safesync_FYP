@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -67,17 +68,13 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
+            SizedBox(
               width: 800,
               height: 800,
-              child:Image.asset('assets/images/logo.png',
-                  width: 50,
-                  height: 50
-              ),
+              child:
+                  Image.asset('assets/images/logo.png', width: 50, height: 50),
             ),
-
             const SizedBox(height: 1),
-
             const CircularProgressIndicator(
               valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
             ),
@@ -255,9 +252,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       size: 24,
                     ),
                   ),
-
                   const SizedBox(height: 100),
-
                   Column(
                     children: [
                       Container(
@@ -267,53 +262,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(22.5),
                         ),
-                        child:Image.asset('assets/images/watch.jpg',
-                            width: 24,
-                            height: 24
-                        ),
+                        child: Image.asset('assets/images/watch.jpg',
+                            width: 24, height: 24),
                       ),
                     ],
                   ),
                 ],
               ),
 
-              const SizedBox(height:40),
+              const SizedBox(height: 40),
 
               // Heart rate display with animated icon
-              AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale: 1.0 + (_pulseController.value * 0.1),
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: Colors.transparent,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: Colors.white,
-                                width: 2,
-                              ),
-                            ),
-                          ),
-                          const CustomPaint(size: Size(30, 40),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+              Lottie.asset(
+                'assets/images/heartbeat.json',  // Your JSON file path
+                width: 100,
+                height: 100,
+                repeat: true,  // Loop the animation
+                animate: true,
               ),
 
               const SizedBox(height: 10),
@@ -449,7 +414,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildFeatureButton(String title, String subtitle, IconData icon, String buttonKey) {
+  Widget _buildFeatureButton(
+      String title, String subtitle, IconData icon, String buttonKey) {
     bool isPressed = buttonPressed[buttonKey] ?? false;
 
     return GestureDetector(
