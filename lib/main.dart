@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'package:safesync/screens/emergency/emergency_contacts.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/home/smartwatch_detail.dart';
 import 'screens/settings/recording_settings.dart';
+import 'screens/profile/profile_screen.dart';
+import 'screens/home/pair_smart_devices.dart';
+import 'screens/map/map_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,6 +42,9 @@ class SafeSyncApp extends StatelessWidget {
         '/main': (context) => const MainScreen(),
         '/smartwatch': (context) => const SmartwatchDetailScreen(),
         '/recording-settings': (context) => const RecordingSettingsScreen(),
+        '/pair-smart-devices': (context) => const PairSmartDevicesScreen(),
+        '/profile': (context) => const ProfileScreen(),
+        '/contacts': (context) => const EmergencyContactsScreen(),
       },
     );
   }
@@ -79,8 +86,7 @@ class _SplashScreenState extends State<SplashScreen> {
             SizedBox(
               width: 800,
               height: 800,
-              child:
-                  Image.asset('assets/images/logo.png', width: 50, height: 50),
+              child: Image.asset('assets/images/logo.png', width: 50, height: 50),
             ),
             const SizedBox(height: 1),
             const CircularProgressIndicator(
@@ -103,17 +109,25 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int currentIndex = 0;
 
-  final List<Widget> screens = [
+  // Define screens as a getter to ensure fresh instances
+  List<Widget> get screens => [
     const HomeScreen(),
     const MapScreen(),
-    const ProfileScreen(),
+    const EmergencyContactsScreen(), // Temporary test widget
     const CommunityScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
+    // Debug: Print what screen should be shown
+    print('Building MainScreen with currentIndex: $currentIndex');
+    print('Screen at index $currentIndex: ${screens[currentIndex].runtimeType}');
+
     return Scaffold(
-      body: screens[currentIndex],
+      body: IndexedStack(
+        index: currentIndex,
+        children: screens,
+      ),
       bottomNavigationBar: Container(
         height: 90,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
@@ -141,7 +155,7 @@ class _MainScreenState extends State<MainScreen> {
             children: [
               _buildNavItem(Icons.home_filled, "Home", 0),
               _buildNavItem(Icons.map_outlined, "Map", 1),
-              _buildNavItem(Icons.person_outline, "Contact", 2),
+              _buildNavItem(Icons.person_outline, "Contacts", 2),
               _buildNavItem(Icons.groups, "Community", 3),
             ],
           ),
@@ -158,6 +172,14 @@ class _MainScreenState extends State<MainScreen> {
         setState(() {
           currentIndex = index;
         });
+
+        // Enhanced debug prints
+        print('Navigating to index: $index');
+        print('Current screen: ${screens[index].runtimeType}');
+        if (index == 2) {
+          print('Should show EmergencyContactsScreen');
+          print('Actual screen type: ${screens[2].runtimeType}');
+        }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
@@ -247,17 +269,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: const Icon(
-                      Icons.person,
-                      color: Colors.white,
-                      size: 24,
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pushNamed(context, '/profile');
+                    },
+                    child: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      child: const Icon(
+                        Icons.person,
+                        color: Colors.white,
+                        size: 24,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 100),
@@ -287,10 +314,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
               // Heart rate display with animated icon
               Lottie.asset(
-                'assets/images/heartbeat.json', // Your JSON file path
+                'assets/images/heartbeat.json',
                 width: 100,
                 height: 100,
-                repeat: true, // Loop the animation
+                repeat: true,
                 animate: true,
               ),
 
@@ -329,6 +356,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   _buildActivityIndicator(
                     Icons.watch_rounded,
                     "Pair Smart\nDevices",
+                    onTap: () {
+                      Navigator.pushNamed(context, '/pair-smart-devices');
+                    },
                   ),
                 ],
               ),
@@ -428,14 +458,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ),
       ],
     );
-    
+
     if (onTap != null) {
       return GestureDetector(
         onTap: onTap,
         child: content,
       );
     }
-    
+
     return content;
   }
 
@@ -578,54 +608,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             activeColor: const Color(0xFFDD0000),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class MapScreen extends StatelessWidget {
-  const MapScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF36060),
-      appBar: AppBar(
-        title: const Text('Crime Map', style: TextStyle(color: Colors.white)),
-        centerTitle: true,
-        backgroundColor: const Color(0xFFF36060),
-        elevation: 0,
-        automaticallyImplyLeading: false,
-      ),
-      body: const Center(
-        child: Text(
-          'Crime Map Screen',
-          style: TextStyle(color: Colors.white, fontSize: 24),
-        ),
-      ),
-    );
-  }
-}
-
-class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF36060),
-      appBar: AppBar(
-        title: const Text('Contact', style: TextStyle(color: Colors.white)),
-        centerTitle: true,
-        backgroundColor: const Color(0xFFF36060),
-        elevation: 0,
-        automaticallyImplyLeading: false,
-      ),
-      body: const Center(
-        child: Text(
-          'Contact Screen',
-          style: TextStyle(color: Colors.white, fontSize: 24),
-        ),
       ),
     );
   }

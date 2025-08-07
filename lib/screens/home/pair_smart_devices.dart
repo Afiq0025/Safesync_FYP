@@ -64,20 +64,20 @@ class _PairSmartDevicesScreenState extends State<PairSmartDevicesScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Paired devices list
                   ...pairedDevices.map((device) => _buildDeviceCard(device, true)),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Divider line
                   Container(
                     height: 1,
                     color: Colors.grey[300],
                   ),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Available Devices Section
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -108,9 +108,9 @@ class _PairSmartDevicesScreenState extends State<PairSmartDevicesScreen> {
                       ),
                     ],
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // Available devices list
                   Expanded(
                     child: SingleChildScrollView(

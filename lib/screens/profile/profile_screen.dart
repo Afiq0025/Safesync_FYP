@@ -49,9 +49,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     color: Color(0xFF666666),
                   ),
                 ),
-                
+
                 const SizedBox(height: 20),
-                
+
                 // Name
                 const Text(
                   'Name',
@@ -61,9 +61,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     color: Colors.black,
                   ),
                 ),
-                
+
                 const SizedBox(height: 8),
-                
+
                 // Phone Number
                 const Text(
                   'Phone Number',
@@ -72,9 +72,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     color: Color(0xFF666666),
                   ),
                 ),
-                
+
                 const SizedBox(height: 4),
-                
+
                 // Email Address
                 const Text(
                   'Email Address',
@@ -85,26 +85,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 40),
-            
+
             // Expandable Sections
             _buildExpandableSection('Address', 'address'),
             const SizedBox(height: 12),
-            
+
             _buildExpandableSection('Blood Type', 'bloodType'),
             const SizedBox(height: 12),
-            
+
             _buildExpandableSection('Allergies', 'allergies'),
             const SizedBox(height: 12),
-            
+
             _buildExpandableSection('Medical Conditions', 'medicalConditions'),
             const SizedBox(height: 12),
-            
+
             _buildExpandableSection('Medications', 'medications'),
-            
+
             const SizedBox(height: 60),
-            
+
             // Log out button
             Container(
               width: double.infinity,
@@ -130,7 +130,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 40),
           ],
         ),
@@ -140,7 +140,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildExpandableSection(String title, String key) {
     bool isExpanded = expandedSections[key] ?? false;
-    
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(

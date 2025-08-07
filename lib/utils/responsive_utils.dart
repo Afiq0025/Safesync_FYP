@@ -125,9 +125,9 @@ class ResponsiveUtils {
   // Safe area aware height
   static double getSafeAreaHeight(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
-    return mediaQuery.size.height - 
-           mediaQuery.padding.top - 
-           mediaQuery.padding.bottom;
+    return mediaQuery.size.height -
+        mediaQuery.padding.top -
+        mediaQuery.padding.bottom;
   }
 
   // Responsive card width for forms
