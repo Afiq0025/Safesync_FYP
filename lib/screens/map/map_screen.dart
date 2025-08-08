@@ -10,10 +10,6 @@ class MapScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: const Color(0xFFF36060),
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: const Text(
           'Map',
           style: TextStyle(
