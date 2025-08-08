@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
+import 'package:safesync/screens/community/report_screen.dart';
 import 'package:safesync/screens/emergency/emergency_contacts.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
@@ -114,7 +115,7 @@ class _MainScreenState extends State<MainScreen> {
     const HomeScreen(),
     const MapScreen(),
     const EmergencyContactsScreen(), // Temporary test widget
-    const CommunityScreen(),
+    const ReportScreen(),
   ];
 
   @override
@@ -608,30 +609,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             activeColor: const Color(0xFFDD0000),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class CommunityScreen extends StatelessWidget {
-  const CommunityScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF36060),
-      appBar: AppBar(
-        title: const Text('Community', style: TextStyle(color: Colors.white)),
-        centerTitle: true,
-        backgroundColor: const Color(0xFFF36060),
-        elevation: 0,
-        automaticallyImplyLeading: false,
-      ),
-      body: const Center(
-        child: Text(
-          'Community Screen',
-          style: TextStyle(color: Colors.white, fontSize: 24),
-        ),
       ),
     );
   }

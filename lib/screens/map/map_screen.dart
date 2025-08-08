@@ -1,7 +1,67 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'dart:async';
 
-class MapScreen extends StatelessWidget {
+class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
+
+  @override
+  State<MapScreen> createState() => _MapScreenState();
+}
+
+class _MapScreenState extends State<MapScreen> {
+  Completer<GoogleMapController> _controller = Completer();
+  
+  static const CameraPosition _kGooglePlex = CameraPosition(
+    target: LatLng(2.9331, 101.7980),
+    zoom: 14.4746,
+  );
+  
+  Set<Marker> _markers = {};
+  Set<Circle> _circles = {};
+  
+  @override
+  void initState() {
+    super.initState();
+    _setMarkersAndCircles();
+  }
+  
+  void _setMarkersAndCircles() {
+    setState(() {
+      // Add user current location marker
+      _markers.add(
+        const Marker(
+          markerId: MarkerId('current_location'),
+          position: LatLng(2.9331, 101.7980),
+          icon: BitmapDescriptor.defaultMarker,
+          infoWindow: InfoWindow(
+            title: 'Your Location',
+            snippet: 'Current position',
+          ),
+        ),
+      );
+      
+      // Add circular zones
+      _circles.addAll([
+        Circle(
+          circleId: const CircleId('safe_circle'),
+          center: const LatLng(2.9331, 101.7980),
+          radius: 300,
+          fillColor: Colors.green.withOpacity(0.3),
+          strokeColor: Colors.green,
+          strokeWidth: 2,
+        ),
+        Circle(
+          circleId: const CircleId('danger_circle'),
+          center: const LatLng(2.9363, 101.7980),
+          radius: 250,
+          fillColor: Colors.red.withOpacity(0.3),
+          strokeColor: Colors.red,
+          strokeWidth: 2,
+        ),
+      ]);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,59 +91,39 @@ class MapScreen extends StatelessWidget {
             ),
             child: Stack(
               children: [
-                // Map content area
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    color: Colors.grey[100],
-                  ),
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.map_outlined,
-                          size: 64,
-                          color: Colors.grey,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'Map will be displayed here',
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
+                // Google Map
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: GoogleMap(
+                    mapType: MapType.normal,
+                    initialCameraPosition: _kGooglePlex,
+                    markers: _markers,
+                    circles: _circles,
+                    onMapCreated: (GoogleMapController controller) {
+                      _controller.complete(controller);
+                    },
+                    zoomControlsEnabled: false,
+                    myLocationButtonEnabled: true,
+                    compassEnabled: false,
+                    mapToolbarEnabled: false,
+                    buildingsEnabled: true,
+                    trafficEnabled: false,
+                    liteModeEnabled: false,
+                    tiltGesturesEnabled: false,
+                    rotateGesturesEnabled: false,
                   ),
                 ),
-                
-                // Location markers overlay - PUBG-style large circular zones
-                Positioned(
-                  top: 80,
-                  left: 60,
-                  bottom: 60,
-                  child: _buildCircleMarker(Colors.red.withOpacity(0.5), 120),
-                ),
-                Positioned(
-                  right: 80,
-                  bottom: 200,
-                  child: _buildCircleMarker(Colors.green.withOpacity(0.6), 100),
-                ),
-
-                
                 // Map controls
                 Positioned(
                   top: 20,
                   right: 20,
                   child: Column(
                     children: [
-                      _buildMapControl(Icons.zoom_in, () {}),
+                      _buildMapControl(Icons.zoom_in, _zoomIn),
                       const SizedBox(height: 8),
-                      _buildMapControl(Icons.zoom_out, () {}),
+                      _buildMapControl(Icons.zoom_out, _zoomOut),
                       const SizedBox(height: 8),
-                      _buildMapControl(Icons.my_location, () {}),
+                      _buildMapControl(Icons.my_location, _goToCurrentLocation),
                     ],
                   ),
                 ),
@@ -121,6 +161,32 @@ class MapScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+  
+  Future<void> _zoomIn() async {
+    final GoogleMapController controller = await _controller.future;
+    controller.animateCamera(CameraUpdate.zoomIn());
+  }
+  
+  Future<void> _zoomOut() async {
+    final GoogleMapController controller = await _controller.future;
+    controller.animateCamera(CameraUpdate.zoomOut());
+  }
+  
+  Future<void> _goToCurrentLocation() async {
+    try {
+      final GoogleMapController controller = await _controller.future;
+      controller.animateCamera(
+        CameraUpdate.newCameraPosition(
+          const CameraPosition(
+            target: LatLng(2.9331, 101.79809), // Default to KL center
+            zoom: 16.0,
+          ),
+        ),
+      );
+    } catch (e) {
+      print('Location permission error: $e');
+    }
   }
 
   Widget _buildCircleMarker(Color color, double size) {
