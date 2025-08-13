@@ -67,19 +67,6 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF36060),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFF36060),
-        elevation: 0,
-        title: const Text(
-          'Map',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        centerTitle: true,
-      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20.0),

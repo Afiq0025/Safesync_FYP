@@ -18,15 +18,6 @@ class EmergencyContactsScreen extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              const Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  CircleAvatar(
-                    backgroundColor: Colors.white,
-                    child: Icon(Icons.person, color: Colors.grey),
-                  ),
-                ],
-              ),
               const SizedBox(height: 20),
               Expanded(
                 child: Container(
