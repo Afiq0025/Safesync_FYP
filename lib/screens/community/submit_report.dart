@@ -27,233 +27,247 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFF6B6B),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Header with back button
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Icon(
-                      Icons.arrow_back,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            // Main content card
-            Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 20),
-                padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(25),
-                    topRight: Radius.circular(25),
-                  ),
-                ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isSmallScreen = constraints.maxWidth < 350;
+            final padding = EdgeInsets.all(isSmallScreen ? 12.0 : 20.0);
+            final cardPadding = EdgeInsets.all(isSmallScreen ? 16.0 : 20.0);
+            final fontSize = isSmallScreen ? 14.0 : 16.0;
+            final titleFontSize = isSmallScreen ? 20.0 : 24.0;
+            final spacing = isSmallScreen ? 12.0 : 16.0;
+
+            return Column(
+              children: [
+                // Header with back button
+                Padding(
+                  padding: padding,
+                  child: Row(
                     children: [
-                      // Title field
-                      const Text(
-                        'Title',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: TextField(
-                          controller: _titleController,
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            hintText: 'Enter report title',
-                            hintStyle: TextStyle(color: Colors.grey),
-                          ),
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 25),
-                      
-                      // Date and Time
-                      const Text(
-                        'Date and Time',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => _selectDate(context),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue[50],
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  selectedDate,
-                                  style: const TextStyle(
-                                    color: Colors.blue,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 15),
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => _selectTime(context),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue[50],
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  selectedTime,
-                                  style: const TextStyle(
-                                    color: Colors.blue,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      
-                      const SizedBox(height: 25),
-                      
-                      // Description field
-                      const Text(
-                        'Description',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        width: double.infinity,
-                        height: 120,
-                        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: TextField(
-                          controller: _descriptionController,
-                          maxLines: null,
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            hintText: 'Describe the incident in detail',
-                            hintStyle: TextStyle(color: Colors.grey),
-                          ),
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 25),
-                      
-                      // Tags
-                      const Text(
-                        'Tags',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: availableTags.map((tag) {
-                          final isSelected = selectedTags.contains(tag);
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                if (isSelected) {
-                                  selectedTags.remove(tag);
-                                } else {
-                                  selectedTags.add(tag);
-                                }
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: isSelected ? Colors.red[600] : Colors.grey[300],
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                tag,
-                                style: TextStyle(
-                                  color: isSelected ? Colors.white : Colors.black87,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      
-                      const SizedBox(height: 40),
-                      
-                      // Submit button
-                      Container(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            // Handle submit logic here
-                            _submitReport();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 18),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(25),
-                            ),
-                          ),
-                          child: const Text(
-                            'Submit report',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Icon(
+                          Icons.arrow_back,
+                          color: Colors.white,
+                          size: isSmallScreen ? 24.0 : 28.0,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ),
-          ],
+                
+                // Main content
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Padding(
+                      padding: padding,
+                      child: Container(
+                        width: double.infinity,
+                        padding: cardPadding,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.only(
+                            topLeft: Radius.circular(isSmallScreen ? 20 : 25),
+                            topRight: Radius.circular(isSmallScreen ? 20 : 25),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Title
+                            Text(
+                              'Submit Report',
+                              style: TextStyle(
+                                fontSize: titleFontSize,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: spacing),
+                            
+                            // Date and Time Row
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => _selectDate(context),
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: isSmallScreen ? 12 : 15,
+                                        vertical: isSmallScreen ? 12 : 15,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue[50],
+                                        borderRadius: BorderRadius.circular(isSmallScreen ? 8 : 10),
+                                      ),
+                                      child: Text(
+                                        selectedDate,
+                                        style: TextStyle(
+                                          color: Colors.blue,
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: fontSize,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(width: isSmallScreen ? 8 : 15),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => _selectTime(context),
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: isSmallScreen ? 12 : 15,
+                                        vertical: isSmallScreen ? 12 : 15,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue[50],
+                                        borderRadius: BorderRadius.circular(isSmallScreen ? 8 : 10),
+                                      ),
+                                      child: Text(
+                                        selectedTime,
+                                        style: TextStyle(
+                                          color: Colors.blue,
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: fontSize,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            
+                            SizedBox(height: spacing),
+                            
+                            // Title field
+                            Text(
+                              'Title',
+                              style: TextStyle(
+                                fontSize: fontSize,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            SizedBox(height: spacing * 0.5),
+                            TextField(
+                              controller: _titleController,
+                              decoration: InputDecoration(
+                                hintText: 'Enter report title',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(isSmallScreen ? 8 : 12),
+                                ),
+                              ),
+                              style: TextStyle(fontSize: fontSize),
+                            ),
+                            
+                            SizedBox(height: spacing),
+                            
+                            // Description field
+                            Text(
+                              'Description',
+                              style: TextStyle(
+                                fontSize: fontSize,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            SizedBox(height: spacing * 0.5),
+                            TextField(
+                              controller: _descriptionController,
+                              maxLines: 4,
+                              decoration: InputDecoration(
+                                hintText: 'Describe the incident',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(isSmallScreen ? 8 : 12),
+                                ),
+                              ),
+                              style: TextStyle(fontSize: fontSize),
+                            ),
+                            
+                            SizedBox(height: spacing),
+                            
+                            // Tags
+                            Text(
+                              'Tags',
+                              style: TextStyle(
+                                fontSize: fontSize,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            SizedBox(height: spacing * 0.5),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: availableTags.map((tag) {
+                                bool isSelected = selectedTags.contains(tag);
+                                return GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      if (isSelected) {
+                                        selectedTags.remove(tag);
+                                      } else {
+                                        selectedTags.add(tag);
+                                      }
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: isSmallScreen ? 12 : 15,
+                                      vertical: isSmallScreen ? 8 : 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isSelected ? Colors.blue : Colors.blue[50],
+                                      borderRadius: BorderRadius.circular(isSmallScreen ? 8 : 10),
+                                    ),
+                                    child: Text(
+                                      tag,
+                                      style: TextStyle(
+                                        color: isSelected ? Colors.white : Colors.blue,
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: fontSize,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                            
+                            SizedBox(height: spacing),
+                            
+                            // Submit button
+                            Container(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  // Handle submit logic here
+                                  _submitReport();
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 18),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(25),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Submit report',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

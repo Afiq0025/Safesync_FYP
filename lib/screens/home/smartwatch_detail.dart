@@ -31,6 +31,7 @@ class SmartwatchDetailScreen extends StatelessWidget {
                 const Center(
                   child: Text(
                     'Samsung Galaxy Watch 4',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.w600,
