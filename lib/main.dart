@@ -295,7 +295,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ],
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 5),
 
               // Heart rate display with animated icon
               PulseIcon(
@@ -314,7 +314,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Text(
                 '$heartRate BpM',
                 style: const TextStyle(
-                  fontSize: 40,
+                  fontSize: 36,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
@@ -322,12 +322,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Text(
                 'Heart Rate - $heartStatus',
                 style: const TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   color: Colors.white70,
                 ),
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 20),
 
               // Activity indicators
               Row(
@@ -350,7 +350,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ],
               ),
 
-              const SizedBox(height: 50),
+              const SizedBox(height: 20),
 
               // Feature cards (now as interactive buttons)
               Expanded(
