@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:lottie/lottie.dart';
 import 'package:safesync/screens/community/report_screen.dart';
 import 'package:safesync/screens/emergency/emergency_contacts.dart';
+import 'package:safesync/widgets/pulse_icon.dart'; // Added import
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/home/smartwatch_detail.dart';
@@ -226,7 +226,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool isLockscreenAccess = false;
   int heartRate = 79;
   String heartStatus = "Normal";
-  late AnimationController _pulseController;
 
   // Track pressed state for each button
   Map<String, bool> buttonPressed = {
@@ -235,21 +234,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     'call': false,
     'location': false,
   };
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
-      vsync: this,
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
 
   void _toggleButton(String buttonKey) {
     setState(() {
@@ -278,7 +262,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       width: 50,
                       height: 50,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
+                        color: Colors.white.withAlpha((255 * 0.2).round()), // Corrected withOpacity
                         borderRadius: BorderRadius.circular(30),
                       ),
                       child: const Icon(
@@ -311,15 +295,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ],
               ),
 
-              const SizedBox(height: 40),
+              const SizedBox(height: 10),
 
               // Heart rate display with animated icon
-              Lottie.asset(
-                'assets/images/heartbeat.json',
-                width: 100,
-                height: 100,
-                repeat: true,
-                animate: true,
+              PulseIcon(
+                icon: Icons.favorite,
+                pulseColor: Colors.white70,
+                iconColor: Colors.redAccent,
+                iconSize: 40,
+                innerSize: 45,
+                pulseSize: 116,
+                pulseCount: 3,
               ),
 
               const SizedBox(height: 10),
@@ -439,7 +425,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           width: 60,
           height: 60,
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
+            color: Colors.white.withAlpha((255 * 0.2).round()), // Corrected withOpacity
             borderRadius: BorderRadius.circular(30),
           ),
           child: Icon(
