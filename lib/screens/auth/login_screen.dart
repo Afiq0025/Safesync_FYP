@@ -14,20 +14,82 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String? _errorMessage;
 
+  // State variables to store registered user data
+  String _registeredName = "";
+  String _registeredPhoneNumber = "";
+  String _registeredEmail = "";
+  String _registeredPassword = "";
+  String _registeredAddress = "";
+  String _registeredBloodType = "";
+  String _registeredAllergies = "";
+  String _registeredMedicalConditions = "";
+  String _registeredMedications = "";
+
+  bool _didExtractArgs = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didExtractArgs) {
+      final args =
+          ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+      print('LoginScreen didChangeDependencies: Received args: $args');
+      if (args != null) {
+        _registeredName = args['name'] as String? ?? '';
+        _registeredPhoneNumber = args['phoneNumber'] as String? ?? '';
+        _registeredEmail = args['email'] as String? ?? '';
+        _registeredPassword = args['password'] as String? ?? ''; // Store password
+        _registeredAddress = args['address'] as String? ?? '';
+        _registeredBloodType = args['bloodType'] as String? ?? '';
+        _registeredAllergies = args['allergies'] as String? ?? '';
+        _registeredMedicalConditions =
+            args['medicalConditions'] as String? ?? '';
+        _registeredMedications = args['medications'] as String? ?? '';
+        
+        // For debugging: Print stored registered data
+        print('LoginScreen: Stored Registered Data - Email: $_registeredEmail, Password: $_registeredPassword, Name: $_registeredName, Phone: $_registeredPhoneNumber, Address: $_registeredAddress, BloodType: $_registeredBloodType, Allergies: $_registeredAllergies, Conditions: $_registeredMedicalConditions, Medications: $_registeredMedications');
+      }
+      _didExtractArgs = true;
+    }
+  }
+
   Future<void> _signIn() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
-    await Future.delayed(const Duration(seconds: 2));
-    // Mock credentials
-    if (_emailController.text == 'test@example.com' &&
-        _passwordController.text == 'password') {
+    await Future.delayed(const Duration(seconds: 1)); 
+
+    // For debugging: print values being compared
+    print('LoginScreen _signIn: Comparing input Email: ${_emailController.text} with Stored: $_registeredEmail');
+    print('LoginScreen _signIn: Comparing input Password: ${_passwordController.text} with Stored: $_registeredPassword');
+
+    // Compare with registered credentials
+    if (_emailController.text == _registeredEmail &&
+        _passwordController.text == _registeredPassword &&
+        _registeredEmail.isNotEmpty) { // Ensure an email was actually registered
       setState(() {
         _isLoading = false;
       });
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/main');
+        // For debugging: Print data being passed to /main
+        print('LoginScreen: Navigating to /main with Name: $_registeredName, Phone: $_registeredPhoneNumber, Email: $_registeredEmail, Address: $_registeredAddress, BloodType: $_registeredBloodType, Allergies: $_registeredAllergies, Conditions: $_registeredMedicalConditions, Medications: $_registeredMedications');
+        
+        Navigator.pushReplacementNamed(
+          context,
+          '/main',
+          arguments: {
+            'name': _registeredName,
+            'phoneNumber': _registeredPhoneNumber,
+            'email': _registeredEmail,
+            'address': _registeredAddress,
+            'bloodType': _registeredBloodType,
+            'allergies': _registeredAllergies,
+            'medicalConditions': _registeredMedicalConditions,
+            'medications': _registeredMedications,
+            // DO NOT pass the password to MainScreen/HomeScreen
+          },
+        );
       }
     } else {
       setState(() {

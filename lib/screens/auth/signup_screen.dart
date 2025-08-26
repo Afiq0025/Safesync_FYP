@@ -38,7 +38,34 @@ class _SignupScreenState extends State<SignupScreen> {
       });
 
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/main');
+        final String fullName = _fullNameController.text;
+        final String phoneNumber = _phoneController.text;
+        final String email = _emailController.text;
+        final String password = _passwordController.text; // <-- Added
+        final String address = _addressController.text;
+        final String bloodType = _bloodTypeController.text;
+        final String allergies = _allergiesController.text;
+        final String medicalConditions = _medicalConditionsController.text;
+        final String medications = _medicationsController.text;
+
+        // Updated print statement to include password (for debugging)
+        print('SignupScreen: Navigating to /login with Name: $fullName, Phone: $phoneNumber, Email: $email, Password: $password, Address: $address, BloodType: $bloodType, Allergies: $allergies, Conditions: $medicalConditions, Medications: $medications');
+
+        Navigator.pushReplacementNamed(
+          context,
+          '/login', // <-- Changed to /login
+          arguments: {
+            'name': fullName,
+            'phoneNumber': phoneNumber,
+            'email': email,
+            'password': password, // <-- Added password
+            'address': address,
+            'bloodType': bloodType,
+            'allergies': allergies,
+            'medicalConditions': medicalConditions,
+            'medications': medications,
+          },
+        );
       }
     }
   }

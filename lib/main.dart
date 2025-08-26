@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:safesync/screens/community/report_screen.dart';
 import 'package:safesync/screens/emergency/emergency_contacts.dart';
-import 'package:safesync/widgets/pulse_icon.dart'; // Added import
+import 'package:safesync/widgets/pulse_icon.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/signup_screen.dart';
 import 'screens/home/smartwatch_detail.dart';
@@ -10,9 +10,34 @@ import 'screens/settings/recording_settings.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/home/pair_smart_devices.dart';
 import 'screens/map/map_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-void main() {
+// Initialize the plugin instance object
+FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
+
+Future<void> main() async { // Make main async
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize flutter_local_notifications
+  const AndroidInitializationSettings initializationSettingsAndroid =
+      AndroidInitializationSettings('@mipmap/ic_launcher'); // Use your app icon
+  final DarwinInitializationSettings initializationSettingsDarwin =
+      DarwinInitializationSettings(
+          onDidReceiveLocalNotification: (id, title, body, payload) async {
+    // Handle notification tapped logic here if needed for older iOS versions
+  });
+  final InitializationSettings initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid, iOS: initializationSettingsDarwin);
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse notificationResponse) async {
+    // Handle notification tapped logic here
+    // String? payload = notificationResponse.payload;
+    // if (payload != null) {
+    //   debugPrint('notification payload: $payload');
+    // }
+  });
 
   runZonedGuarded(() {
     runApp(const SafeSyncApp());
@@ -44,7 +69,23 @@ class SafeSyncApp extends StatelessWidget {
         '/smartwatch': (context) => const SmartwatchDetailScreen(),
         '/recording-settings': (context) => const RecordingSettingsScreen(),
         '/pair-smart-devices': (context) => const PairSmartDevicesScreen(),
-        '/profile': (context) => const ProfileScreen(),
+        '/profile': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments
+              as Map<String, dynamic>?;
+          print('SafeSyncApp /profile route: Received args: $args');
+          return ProfileScreen(
+            name: args?['name'] as String? ?? 'User Name Default',
+            phoneNumber: args?['phoneNumber'] as String? ?? 'N/A Default',
+            email: args?['email'] as String? ?? 'N/A Default',
+            address: args?['address'] as String? ?? 'Address Default',
+            bloodType: args?['bloodType'] as String? ?? 'Blood Type Default',
+            allergies: args?['allergies'] as String? ?? 'Allergies Default',
+            medicalConditions: args?['medicalConditions'] as String? ??
+                'Conditions Default',
+            medications:
+                args?['medications'] as String? ?? 'Medications Default',
+          );
+        },
         '/contacts': (context) => const EmergencyContactsScreen(),
       },
     );
@@ -85,11 +126,11 @@ class _SplashScreenState extends State<SplashScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             SizedBox(
-              width: 800,
-              height: 800,
-              child: Image.asset('assets/images/logo.png', width: 50, height: 50),
+              width: 600,
+              height: 600,
+              child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
             ),
-            const SizedBox(height: 1),
+            const SizedBox(height: 5),
             const CircularProgressIndicator(
               valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
             ),
@@ -109,21 +150,63 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int currentIndex = 0;
+  String _name = "User Name";
+  String _phoneNumber = "N/A";
+  String _email = "N/A";
+  String _address = "Address Default";
+  String _bloodType = "Blood Type Default";
+  String _allergies = "Allergies Default";
+  String _medicalConditions = "Conditions Default";
+  String _medications = "Medications Default";
 
-  // Define screens as a getter to ensure fresh instances
-  List<Widget> get screens => [
-    const HomeScreen(),
-    const MapScreen(),
-    const EmergencyContactsScreen(), // Temporary test widget
-    const ReportScreen(),
-  ];
+  bool _didExtractArgs = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_didExtractArgs) {
+      final args =
+          ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
+      print('MainScreen didChangeDependencies: Received args: $args');
+      if (args != null) {
+        _name = args['name'] as String? ?? _name;
+        _phoneNumber = args['phoneNumber'] as String? ?? _phoneNumber;
+        _email = args['email'] as String? ?? _email;
+        _address = args['address'] as String? ?? _address;
+        _bloodType = args['bloodType'] as String? ?? _bloodType;
+        _allergies = args['allergies'] as String? ?? _allergies;
+        _medicalConditions =
+            args['medicalConditions'] as String? ?? _medicalConditions;
+        _medications = args['medications'] as String? ?? _medications;
+        print(
+            'MainScreen didChangeDependencies: Stored Name: $_name, Phone: $_phoneNumber, Email: $_email, Address: $_address, BloodType: $_bloodType, Allergies: $_allergies, Conditions: $_medicalConditions, Medications: $_medications');
+      }
+      _didExtractArgs = true;
+    }
+  }
+
+  List<Widget> get screens {
+    print(
+        'MainScreen screens getter: Passing to HomeScreen - Name: $_name, Phone: $_phoneNumber, Email: $_email, Address: $_address, BloodType: $_bloodType, Allergies: $_allergies, Conditions: $_medicalConditions, Medications: $_medications');
+    return [
+      HomeScreen(
+        name: _name,
+        phoneNumber: _phoneNumber,
+        email: _email,
+        address: _address,
+        bloodType: _bloodType,
+        allergies: _allergies,
+        medicalConditions: _medicalConditions,
+        medications: _medications,
+      ),
+      const MapScreen(),
+      const EmergencyContactsScreen(),
+      const ReportScreen(),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Debug: Print what screen should be shown
-    print('Building MainScreen with currentIndex: $currentIndex');
-    print('Screen at index $currentIndex: ${screens[currentIndex].runtimeType}');
-
     return Scaffold(
       body: IndexedStack(
         index: currentIndex,
@@ -134,10 +217,6 @@ class _MainScreenState extends State<MainScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(25),
-            topRight: Radius.circular(25),
-          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black12,
@@ -167,20 +246,11 @@ class _MainScreenState extends State<MainScreen> {
 
   Widget _buildNavItem(IconData icon, String label, int index) {
     bool isSelected = currentIndex == index;
-
     return GestureDetector(
       onTap: () {
         setState(() {
           currentIndex = index;
         });
-
-        // Enhanced debug prints
-        print('Navigating to index: $index');
-        print('Current screen: ${screens[index].runtimeType}');
-        if (index == 2) {
-          print('Should show EmergencyContactsScreen');
-          print('Actual screen type: ${screens[2].runtimeType}');
-        }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
@@ -203,7 +273,7 @@ class _MainScreenState extends State<MainScreen> {
                 label,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 14,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -216,24 +286,194 @@ class _MainScreenState extends State<MainScreen> {
 }
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final String name;
+  final String phoneNumber;
+  final String email;
+  final String address;
+  final String bloodType;
+  final String allergies;
+  final String medicalConditions;
+  final String medications;
+
+  const HomeScreen({
+    super.key,
+    required this.name,
+    required this.phoneNumber,
+    required this.email,
+    required this.address,
+    required this.bloodType,
+    required this.allergies,
+    required this.medicalConditions,
+    required this.medications,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  bool isLockscreenAccess = false;
+  // bool isLockscreenAccess = false; // Replaced by _isLockscreenAccessEnabled
+  bool _isLockscreenAccessEnabled = false; // Persistent state
   int heartRate = 79;
   String heartStatus = "Normal";
 
-  // Track pressed state for each button
   Map<String, bool> buttonPressed = {
     'emergency': false,
     'voice': false,
     'call': false,
     'location': false,
   };
+
+  // SharedPreferences keys
+  static const String _prefLockscreenAccessKey = 'lockscreenAccessEnabled';
+  static const String _prefMedicalName = 'medicalName';
+  static const String _prefMedicalPhoneNumber = 'medicalPhoneNumber';
+  static const String _prefMedicalBloodType = 'medicalBloodType';
+  static const String _prefMedicalAllergies = 'medicalAllergies';
+  static const String _prefMedicalConditions = 'medicalConditions';
+  static const String _prefMedicalMedications = 'medicalMedications';
+  static const int _medicalInfoNotificationId = 0;
+
+
+  @override
+  void initState() {
+    super.initState();
+    _requestNotificationPermissions();
+    _loadSwitchStateAndShowNotification();
+  }
+
+  Future<void> _requestNotificationPermissions() async {
+    if (Theme.of(context).platform == TargetPlatform.android) {
+      final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
+          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      if (androidImplementation != null) {
+        print('HomeScreen: Requesting Android notification permission (using requestPermission)...');
+        final bool? granted = await androidImplementation.requestPermission(); // Using older method
+        print('HomeScreen: Android Notification permission granted (using requestPermission): $granted');
+      }
+    } else if (Theme.of(context).platform == TargetPlatform.iOS) {
+      print('HomeScreen: Requesting iOS notification permissions...');
+      final bool? resultIOS = await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+      print("HomeScreen: iOS Notification permission granted: $resultIOS");
+    }
+  }
+
+  Future<void> _loadSwitchStateAndShowNotification() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isLockscreenAccessEnabled = prefs.getBool(_prefLockscreenAccessKey) ?? false;
+    });
+    if (_isLockscreenAccessEnabled) {
+      print("Lockscreen access was enabled, showing notification on load.");
+      await _showMedicalInfoNotification();
+    }
+  }
+
+  Future<void> _saveSwitchStateAndMedicalInfo(bool isEnabled) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _isLockscreenAccessEnabled = isEnabled;
+    });
+    await prefs.setBool(_prefLockscreenAccessKey, isEnabled);
+
+    if (isEnabled) {
+      print("Saving medical info and showing notification.");
+      await prefs.setString(_prefMedicalName, widget.name);
+      await prefs.setString(_prefMedicalPhoneNumber, widget.phoneNumber);
+      await prefs.setString(_prefMedicalBloodType, widget.bloodType);
+      await prefs.setString(_prefMedicalAllergies, widget.allergies);
+      await prefs.setString(_prefMedicalConditions, widget.medicalConditions);
+      await prefs.setString(_prefMedicalMedications, widget.medications);
+      await _showMedicalInfoNotification();
+    } else {
+      print("Cancelling notification.");
+      await _cancelMedicalInfoNotification();
+      // Optionally clear the saved medical info
+      // await prefs.remove(_prefMedicalName);
+      // ... and other medical fields
+    }
+  }
+
+  Future<void> _showMedicalInfoNotification() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final name = prefs.getString(_prefMedicalName) ?? widget.name;
+    final phone = prefs.getString(_prefMedicalPhoneNumber) ?? widget.phoneNumber;
+    final blood = prefs.getString(_prefMedicalBloodType) ?? widget.bloodType;
+    final allergies = prefs.getString(_prefMedicalAllergies) ?? widget.allergies;
+    final conditions = prefs.getString(_prefMedicalConditions) ?? widget.medicalConditions;
+    final medications = prefs.getString(_prefMedicalMedications) ?? widget.medications;
+
+    // Renamed 'body' to 'fullBody' for the expanded notification content
+    String fullBody = '''Name: $name
+Emergency Contact: $phone
+Blood Type: $blood
+Allergies: $allergies
+Medical Conditions: $conditions
+Medications: $medications''';
+
+    // Text for the collapsed notification
+    String collapsedSummaryText = 'Name: $name - Tap for medical details';
+
+    print("Showing notification. Collapsed summary: '$collapsedSummaryText'. Full body: '$fullBody'");
+
+    // Style information for an expandable (Big Text) notification
+    final BigTextStyleInformation bigTextStyleInformation = BigTextStyleInformation(
+      fullBody, // Content for the expanded view
+      htmlFormatBigText: false,
+      contentTitle: 'Medical Information (Full)', // Title for the expanded view
+      htmlFormatContentTitle: false,
+      summaryText: 'Medical Details', // Summary text when expanded (optional)
+      htmlFormatSummaryText: false,
+    );
+
+    final AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'medical_info_channel', // id
+      'Medical Information', // title
+      channelDescription: 'Displays critical medical information on lockscreen.', // description
+      importance: Importance.max,
+      priority: Priority.high,
+      ongoing: true, // Makes the notification persistent
+      autoCancel: false, // Notification stays until explicitly cancelled
+      // icon: '@mipmap/ic_launcher', // Ensure this icon exists
+      styleInformation: bigTextStyleInformation, // Apply the expandable style
+    );
+    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+        DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+    final NotificationDetails platformChannelSpecifics = NotificationDetails(
+        android: androidPlatformChannelSpecifics, iOS: iOSPlatformChannelSpecifics);
+
+    try {
+      await flutterLocalNotificationsPlugin.show(
+        _medicalInfoNotificationId,
+        'Medical Information Access Enabled', // Title for the collapsed notification
+        collapsedSummaryText, // Body for the collapsed notification
+        platformChannelSpecifics,
+        payload: 'MedicalInfoNotification',
+      );
+      print("Notification shown successfully.");
+    } catch (e) {
+      print("Error showing notification: $e");
+    }
+  }
+
+  Future<void> _cancelMedicalInfoNotification() async {
+    await flutterLocalNotificationsPlugin.cancel(_medicalInfoNotificationId);
+    print("Notification cancelled.");
+  }
+
 
   void _toggleButton(String buttonKey) {
     setState(() {
@@ -250,19 +490,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           padding: const EdgeInsets.symmetric(horizontal: 20.0),
           child: Column(
             children: [
-              // Top status bar with time and profile
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   GestureDetector(
                     onTap: () {
-                      Navigator.pushNamed(context, '/profile');
+                      print(
+                          'HomeScreen onTap Profile: Navigating to /profile with Name: ${widget.name}, Phone: ${widget.phoneNumber}, Email: ${widget.email}, Address: ${widget.address}, BloodType: ${widget.bloodType}, Allergies: ${widget.allergies}, Conditions: ${widget.medicalConditions}, Medications: ${widget.medications}');
+                      Navigator.pushNamed(
+                        context,
+                        '/profile',
+                        arguments: {
+                          'name': widget.name,
+                          'phoneNumber': widget.phoneNumber,
+                          'email': widget.email,
+                          'address': widget.address,
+                          'bloodType': widget.bloodType,
+                          'allergies': widget.allergies,
+                          'medicalConditions': widget.medicalConditions,
+                          'medications': widget.medications,
+                        },
+                      );
                     },
                     child: Container(
                       width: 50,
                       height: 50,
                       decoration: BoxDecoration(
-                        color: Colors.white.withAlpha((255 * 0.2).round()), // Corrected withOpacity
+                        color: Colors.white.withAlpha((255 * 0.2).round()),
                         borderRadius: BorderRadius.circular(30),
                       ),
                       child: const Icon(
@@ -294,10 +548,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ],
               ),
-
               const SizedBox(height: 5),
-
-              // Heart rate display with animated icon
               PulseIcon(
                 icon: Icons.favorite,
                 pulseColor: Colors.white70,
@@ -307,10 +558,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 pulseSize: 116,
                 pulseCount: 3,
               ),
-
               const SizedBox(height: 10),
-
-              // Heart rate text
               Text(
                 '$heartRate BpM',
                 style: const TextStyle(
@@ -326,10 +574,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   color: Colors.white70,
                 ),
               ),
-
               const SizedBox(height: 20),
-
-              // Activity indicators
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -349,10 +594,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 ],
               ),
-
               const SizedBox(height: 20),
-
-              // Feature cards (now as interactive buttons)
               Expanded(
                 child: SingleChildScrollView(
                   child: Column(
@@ -371,7 +613,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           Expanded(
                             child: _buildFeatureButton(
                               "AI Voice Recognition",
-                              "Always listening for distress",
+                              "Always listen for distress",
                               Icons.graphic_eq,
                               'voice',
                             ),
@@ -401,11 +643,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ],
                       ),
                       const SizedBox(height: 16),
-
-                      // Status cards
                       _buildStatusCard("Last Fall Detected", "Never"),
                       const SizedBox(height: 12),
-                      _buildLockscreenCard(),
+                      _buildLockscreenCard(), // This will now use the new logic
                       const SizedBox(height: 20),
                     ],
                   ),
@@ -418,14 +658,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildActivityIndicator(IconData icon, String label, {VoidCallback? onTap}) {
+  Widget _buildActivityIndicator(IconData icon, String label,
+      {VoidCallback? onTap}) {
     Widget content = Column(
       children: [
         Container(
           width: 60,
           height: 60,
           decoration: BoxDecoration(
-            color: Colors.white.withAlpha((255 * 0.2).round()), // Corrected withOpacity
+            color: Colors.white.withAlpha((255 * 0.2).round()),
             borderRadius: BorderRadius.circular(30),
           ),
           child: Icon(
@@ -452,14 +693,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         child: content,
       );
     }
-
     return content;
   }
 
   Widget _buildFeatureButton(
       String title, String subtitle, IconData icon, String buttonKey) {
     bool isPressed = buttonPressed[buttonKey] ?? false;
-
     return GestureDetector(
       onTap: () => _toggleButton(buttonKey),
       child: AnimatedContainer(
@@ -552,7 +791,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isSmallScreen = constraints.maxWidth < 350;
-        
         return Container(
           width: double.infinity,
           padding: EdgeInsets.symmetric(
@@ -601,11 +839,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(width: 8),
               Switch(
-                value: isLockscreenAccess,
+                value: _isLockscreenAccessEnabled, // Use new state variable
                 onChanged: (value) {
-                  setState(() {
-                    isLockscreenAccess = value;
-                  });
+                  _saveSwitchStateAndMedicalInfo(value); // Call new save & notify method
                 },
                 activeColor: const Color(0xFFDD0000),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
