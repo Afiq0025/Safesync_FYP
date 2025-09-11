@@ -13,8 +13,8 @@ import 'screens/home/pair_smart_devices.dart';
 import 'screens/map/map_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:sensors_plus/sensors_plus.dart'; // For Fall Detection
-import 'dart:math'; // For sqrt, pow in Fall Detection
+import 'package:sensors_plus/sensors_plus.dart'; // For Fall Detection & Shake
+import 'dart:math'; // For sqrt, pow
 
 // Initialize the plugin instance object
 FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -305,10 +305,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  bool _isLockscreenAccessEnabled = false; 
+  bool _isLockscreenAccessEnabled = false;
   int heartRate = 79;
   String heartStatus = "Normal";
-  DateTime? _lastFallTime; 
+  DateTime? _lastFallTime;
 
   Map<String, bool> buttonPressed = {
     'emergency': false,
@@ -329,48 +329,97 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // For Fall Detection
   StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
   static const double _fallThreshold = 25.0; // m/s^2 - Needs tuning!
-  bool _isFallCooldown = false; 
+  bool _isFallCooldown = false;
   Timer? _fallCooldownTimer;
+
+  // For Shake Detection
+  static const double _shakeThreshold = 30.0; // m/s^2 - Needs tuning for shake vs fall
+  static const int _shakeCountThreshold = 3;    // Number of shakes needed
+  static const int _shakeTimeWindowMillis = 2000; // 2 seconds window for the shakes
+  List<int> _shakeTimestamps = []; // Stores timestamps of qualifying shake events
+  bool _isShakeCooldownActive = false;
+  Timer? _shakeCooldownTimer;
+  static const Duration _shakeCooldownDuration = Duration(seconds: 10); // Cooldown after trigger
+
 
   @override
   void initState() {
     super.initState();
     _requestNotificationPermissions();
     _loadSwitchStateAndShowNotification();
-    _initAccelerometer(); // Initialize fall detection
+    _initAccelerometer(); // Initialize accelerometer for fall and shake
   }
 
   @override
   void dispose() {
-    _accelerometerSubscription?.cancel(); // Cancel fall detection subscription
-    _fallCooldownTimer?.cancel(); // Cancel fall detection cooldown timer
+    _accelerometerSubscription?.cancel();
+    _fallCooldownTimer?.cancel();
+    _shakeCooldownTimer?.cancel(); // Cancel shake cooldown timer
     super.dispose();
   }
-  
+
   void _initAccelerometer() {
     _accelerometerSubscription = accelerometerEvents.listen((AccelerometerEvent event) {
       double x = event.x;
       double y = event.y;
       double z = event.z;
-  
       double accelerationMagnitude = sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2));
-  
+      final int currentTimeMillis = DateTime.now().millisecondsSinceEpoch;
+
+      // Fall Detection Logic
       if (!_isFallCooldown && accelerationMagnitude > _fallThreshold) {
         print('Potential fall detected! Magnitude: $accelerationMagnitude');
         if (mounted) {
           _updateLastFallDetected(DateTime.now());
-          
           setState(() {
             _isFallCooldown = true;
           });
-          _fallCooldownTimer?.cancel(); 
-          _fallCooldownTimer = Timer(const Duration(seconds: 5), () { 
+          _fallCooldownTimer?.cancel();
+          _fallCooldownTimer = Timer(const Duration(seconds: 5), () {
             if (mounted) {
               setState(() {
                 _isFallCooldown = false;
               });
             }
           });
+        }
+      }
+
+      // Shake Detection Logic
+      // Remove old timestamps that are outside the shake window
+      _shakeTimestamps.removeWhere((timestamp) => currentTimeMillis - timestamp > _shakeTimeWindowMillis);
+
+      if (accelerationMagnitude > _shakeThreshold) {
+        // Only add if it's not too close to the last event to avoid counting one shake multiple times
+        if (_shakeTimestamps.isEmpty || (currentTimeMillis - _shakeTimestamps.last > 250) ) { // 250ms debounce
+            _shakeTimestamps.add(currentTimeMillis);
+            print('Shake event registered. Count: ${_shakeTimestamps.length}, Mag: $accelerationMagnitude');
+        }
+
+
+        if (_shakeTimestamps.length >= _shakeCountThreshold) {
+          if (!_isShakeCooldownActive && buttonPressed['emergency'] == true) {
+            print('Vigorous SHAKE DETECTED and Emergency Mode is ON!');
+            if(mounted) _handleEmergencyTrigger(); // Ensure widget is mounted
+            _shakeTimestamps.clear(); // Clear timestamps after triggering
+            setState(() {
+              _isShakeCooldownActive = true;
+            });
+            _shakeCooldownTimer?.cancel();
+            _shakeCooldownTimer = Timer(_shakeCooldownDuration, () {
+              print('Shake cooldown finished.');
+              if (mounted) {
+                setState(() {
+                  _isShakeCooldownActive = false;
+                });
+              }
+            });
+          } else if (_isShakeCooldownActive) {
+            // print('Shake detected, but in cooldown.'); // Can be noisy
+          } else if (buttonPressed['emergency'] != true) {
+            // print('Shake detected, but Emergency Mode is OFF.'); // Can be noisy
+            _shakeTimestamps.clear(); // Clear if emergency mode is off to prevent build-up
+          }
         }
       }
     });
@@ -515,54 +564,72 @@ Medications: $medications''';
   }
 
   Future<void> _handleEmergencyTrigger() async {
-    if (buttonPressed['emergency'] == true) {
-      bool? confirmed;
-      try {
-        confirmed = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (BuildContext dialogContext) {
-            return AlertDialog(
-              title: const Text('Confirm Emergency'),
-              content: const Text('Are you sure you want to activate emergency mode? Respond within 10 seconds.'),
-              actions: <Widget>[
-                TextButton(
-                  child: const Text('No'),
-                  onPressed: () {
-                    Navigator.of(dialogContext).pop(false);
-                  },
-                ),
-                TextButton(
-                  child: const Text('Yes'),
-                  onPressed: () {
-                    Navigator.of(dialogContext).pop(true);
-                  },
-                ),
-              ],
-            );
-          },
-        ).timeout(const Duration(seconds: 10));
-      } on TimeoutException {
-        print("Emergency confirmation timed out.");
-        if (mounted) {
-          Navigator.of(context, rootNavigator: true).pop(); // Dismiss the dialog
-        }
-        _initiateFakeAutoCallToPolice();
+    if (buttonPressed['emergency'] != true) {
+        print("_handleEmergencyTrigger called, but Emergency Mode feature is not active. No dialog shown.");
         return;
-      }
+    }
+    // Prevent multiple dialogs if already one is showing due to rapid triggers
+    if (ModalRoute.of(context)?.isCurrent != true) {
+      // Assuming the dialog is a new route, if it's not the current one, another might be active
+      // This is a simple check; more robust dialog management might be needed.
+      // However, the cooldowns (fall and shake) should largely prevent this.
+    }
 
-      if (confirmed == true) {
-        print("Emergency sequence ACTIVATED!");
-        if (buttonPressed['location'] == true) {
-          _startSharingLocation();
-        } else {
-          print("Location Sharing feature is not toggled on, so not starting it.");
+
+    bool? confirmed;
+    try {
+      // Ensure context is valid and widget is mounted before showing dialog
+      if (!mounted) return;
+
+      confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text('Confirm Emergency'),
+            content: const Text('Are you sure you want to activate emergency mode? Respond within 10 seconds.'),
+            actions: <Widget>[
+              TextButton(
+                child: const Text('No'),
+                onPressed: () {
+                  if(Navigator.of(dialogContext).canPop()) Navigator.of(dialogContext).pop(false);
+                },
+              ),
+              TextButton(
+                child: const Text('Yes'),
+                onPressed: () {
+                  if(Navigator.of(dialogContext).canPop()) Navigator.of(dialogContext).pop(true);
+                },
+              ),
+            ],
+          );
+        },
+      ).timeout(const Duration(seconds: 10));
+    } on TimeoutException {
+      print("Emergency confirmation timed out.");
+      if (mounted) {
+        // Only pop if the dialog is still visible and context is valid
+        if (Navigator.of(context, rootNavigator: true).canPop()) {
+            Navigator.of(context, rootNavigator: true).pop();
         }
-      } else if (confirmed == false) {
-        print("Emergency activation CANCELLED by user.");
       }
-    } else {
-      print("Emergency trigger received, but Emergency Mode feature is not active.");
+      _initiateFakeAutoCallToPolice();
+      return;
+    } catch (e) {
+      print("Error showing dialog: $e");
+      return; // Don't proceed if dialog couldn't be shown
+    }
+
+
+    if (confirmed == true) {
+      print("Emergency sequence ACTIVATED!");
+      if (buttonPressed['location'] == true) {
+        _startSharingLocation();
+      } else {
+        print("Location Sharing feature is not toggled on, so not starting it.");
+      }
+    } else if (confirmed == false) {
+      print("Emergency activation CANCELLED by user.");
     }
   }
 
@@ -695,7 +762,7 @@ Medications: $medications''';
                   ),
                 ],
               ),
-              const SizedBox(height: 15), 
+              const SizedBox(height: 15),
               Expanded(
                 child: SingleChildScrollView(
                   child: Column(
@@ -743,8 +810,7 @@ Medications: $medications''';
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16), // Adjusted from 12 to 16 before status card
-                      // SIMULATE FALL DETECTION BUTTON IS NOW REMOVED
+                      const SizedBox(height: 16),
                       _buildStatusCard("Last Fall Detected", lastFallDisplayStatus),
                       const SizedBox(height: 12),
                       _buildLockscreenCard(),
