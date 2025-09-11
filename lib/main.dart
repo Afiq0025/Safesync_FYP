@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // Added for DateFormat
 import 'package:safesync/screens/community/report_screen.dart';
 import 'package:safesync/screens/emergency/emergency_contacts.dart';
 import 'package:safesync/widgets/pulse_icon.dart';
@@ -12,6 +13,8 @@ import 'screens/home/pair_smart_devices.dart';
 import 'screens/map/map_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:sensors_plus/sensors_plus.dart'; // For Fall Detection
+import 'dart:math'; // For sqrt, pow in Fall Detection
 
 // Initialize the plugin instance object
 FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -33,10 +36,6 @@ Future<void> main() async { // Make main async
   await flutterLocalNotificationsPlugin.initialize(initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse notificationResponse) async {
     // Handle notification tapped logic here
-    // String? payload = notificationResponse.payload;
-    // if (payload != null) {
-    //   debugPrint('notification payload: $payload');
-    // }
   });
 
   runZonedGuarded(() {
@@ -72,7 +71,6 @@ class SafeSyncApp extends StatelessWidget {
         '/profile': (context) {
           final args = ModalRoute.of(context)!.settings.arguments
               as Map<String, dynamic>?;
-          print('SafeSyncApp /profile route: Received args: $args');
           return ProfileScreen(
             name: args?['name'] as String? ?? 'User Name Default',
             phoneNumber: args?['phoneNumber'] as String? ?? 'N/A Default',
@@ -167,7 +165,6 @@ class _MainScreenState extends State<MainScreen> {
     if (!_didExtractArgs) {
       final args =
           ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
-      print('MainScreen didChangeDependencies: Received args: $args');
       if (args != null) {
         _name = args['name'] as String? ?? _name;
         _phoneNumber = args['phoneNumber'] as String? ?? _phoneNumber;
@@ -178,16 +175,12 @@ class _MainScreenState extends State<MainScreen> {
         _medicalConditions =
             args['medicalConditions'] as String? ?? _medicalConditions;
         _medications = args['medications'] as String? ?? _medications;
-        print(
-            'MainScreen didChangeDependencies: Stored Name: $_name, Phone: $_phoneNumber, Email: $_email, Address: $_address, BloodType: $_bloodType, Allergies: $_allergies, Conditions: $_medicalConditions, Medications: $_medications');
       }
       _didExtractArgs = true;
     }
   }
 
   List<Widget> get screens {
-    print(
-        'MainScreen screens getter: Passing to HomeScreen - Name: $_name, Phone: $_phoneNumber, Email: $_email, Address: $_address, BloodType: $_bloodType, Allergies: $_allergies, Conditions: $_medicalConditions, Medications: $_medications');
     return [
       HomeScreen(
         name: _name,
@@ -312,10 +305,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  // bool isLockscreenAccess = false; // Replaced by _isLockscreenAccessEnabled
-  bool _isLockscreenAccessEnabled = false; // Persistent state
+  bool _isLockscreenAccessEnabled = false; 
   int heartRate = 79;
   String heartStatus = "Normal";
+  DateTime? _lastFallTime; 
 
   Map<String, bool> buttonPressed = {
     'emergency': false,
@@ -324,7 +317,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     'location': false,
   };
 
-  // SharedPreferences keys
   static const String _prefLockscreenAccessKey = 'lockscreenAccessEnabled';
   static const String _prefMedicalName = 'medicalName';
   static const String _prefMedicalPhoneNumber = 'medicalPhoneNumber';
@@ -334,12 +326,61 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   static const String _prefMedicalMedications = 'medicalMedications';
   static const int _medicalInfoNotificationId = 0;
 
+  // For Fall Detection
+  StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
+  static const double _fallThreshold = 25.0; // m/s^2 - Needs tuning!
+  bool _isFallCooldown = false; 
+  Timer? _fallCooldownTimer;
 
   @override
   void initState() {
     super.initState();
     _requestNotificationPermissions();
     _loadSwitchStateAndShowNotification();
+    _initAccelerometer(); // Initialize fall detection
+  }
+
+  @override
+  void dispose() {
+    _accelerometerSubscription?.cancel(); // Cancel fall detection subscription
+    _fallCooldownTimer?.cancel(); // Cancel fall detection cooldown timer
+    super.dispose();
+  }
+  
+  void _initAccelerometer() {
+    _accelerometerSubscription = accelerometerEvents.listen((AccelerometerEvent event) {
+      double x = event.x;
+      double y = event.y;
+      double z = event.z;
+  
+      double accelerationMagnitude = sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2));
+  
+      if (!_isFallCooldown && accelerationMagnitude > _fallThreshold) {
+        print('Potential fall detected! Magnitude: $accelerationMagnitude');
+        if (mounted) {
+          _updateLastFallDetected(DateTime.now());
+          
+          setState(() {
+            _isFallCooldown = true;
+          });
+          _fallCooldownTimer?.cancel(); 
+          _fallCooldownTimer = Timer(const Duration(seconds: 5), () { 
+            if (mounted) {
+              setState(() {
+                _isFallCooldown = false;
+              });
+            }
+          });
+        }
+      }
+    });
+  }
+
+  void _updateLastFallDetected(DateTime fallTime) {
+    setState(() {
+      _lastFallTime = fallTime;
+    });
+    print("Fall detected at: $fallTime. UI should update.");
   }
 
   Future<void> _requestNotificationPermissions() async {
@@ -348,9 +389,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>();
       if (androidImplementation != null) {
-        print('HomeScreen: Requesting Android notification permission (using requestPermission)...');
-        final bool? granted = await androidImplementation.requestPermission(); // Using older method
-        print('HomeScreen: Android Notification permission granted (using requestPermission): $granted');
+        print('HomeScreen: Requesting Android notification permission...');
+        final bool? granted = await androidImplementation.requestPermission();
+        print('HomeScreen: Android Notification permission granted: $granted');
       }
     } else if (Theme.of(context).platform == TargetPlatform.iOS) {
       print('HomeScreen: Requesting iOS notification permissions...');
@@ -396,9 +437,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     } else {
       print("Cancelling notification.");
       await _cancelMedicalInfoNotification();
-      // Optionally clear the saved medical info
-      // await prefs.remove(_prefMedicalName);
-      // ... and other medical fields
     }
   }
 
@@ -411,40 +449,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final conditions = prefs.getString(_prefMedicalConditions) ?? widget.medicalConditions;
     final medications = prefs.getString(_prefMedicalMedications) ?? widget.medications;
 
-    // Renamed 'body' to 'fullBody' for the expanded notification content
     String fullBody = '''Name: $name
 Emergency Contact: $phone
 Blood Type: $blood
 Allergies: $allergies
 Medical Conditions: $conditions
 Medications: $medications''';
-
-    // Text for the collapsed notification
     String collapsedSummaryText = 'Name: $name - Tap for medical details';
-
     print("Showing notification. Collapsed summary: '$collapsedSummaryText'. Full body: '$fullBody'");
 
-    // Style information for an expandable (Big Text) notification
     final BigTextStyleInformation bigTextStyleInformation = BigTextStyleInformation(
-      fullBody, // Content for the expanded view
+      fullBody,
       htmlFormatBigText: false,
-      contentTitle: 'Medical Information (Full)', // Title for the expanded view
+      contentTitle: 'Medical Information (Full)',
       htmlFormatContentTitle: false,
-      summaryText: 'Medical Details', // Summary text when expanded (optional)
+      summaryText: 'Medical Details',
       htmlFormatSummaryText: false,
     );
 
     final AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
-      'medical_info_channel', // id
-      'Medical Information', // title
-      channelDescription: 'Displays critical medical information on lockscreen.', // description
+      'medical_info_channel',
+      'Medical Information',
+      channelDescription: 'Displays critical medical information on lockscreen.',
       importance: Importance.max,
       priority: Priority.high,
-      ongoing: true, // Makes the notification persistent
-      autoCancel: false, // Notification stays until explicitly cancelled
-      // icon: '@mipmap/ic_launcher', // Ensure this icon exists
-      styleInformation: bigTextStyleInformation, // Apply the expandable style
+      ongoing: true,
+      autoCancel: false,
+      styleInformation: bigTextStyleInformation,
     );
     const DarwinNotificationDetails iOSPlatformChannelSpecifics =
         DarwinNotificationDetails(
@@ -458,8 +490,8 @@ Medications: $medications''';
     try {
       await flutterLocalNotificationsPlugin.show(
         _medicalInfoNotificationId,
-        'Medical Information Access Enabled', // Title for the collapsed notification
-        collapsedSummaryText, // Body for the collapsed notification
+        'Medical Information Access Enabled',
+        collapsedSummaryText,
         platformChannelSpecifics,
         payload: 'MedicalInfoNotification',
       );
@@ -474,15 +506,86 @@ Medications: $medications''';
     print("Notification cancelled.");
   }
 
+  void _initiateFakeAutoCallToPolice() {
+    print("AUTO-CALL: Simulating call to nearest police station due to no response.");
+  }
+
+  void _startSharingLocation() {
+    print("LOCATION SHARING: User's location is now being actively shared.");
+  }
+
+  Future<void> _handleEmergencyTrigger() async {
+    if (buttonPressed['emergency'] == true) {
+      bool? confirmed;
+      try {
+        confirmed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext dialogContext) {
+            return AlertDialog(
+              title: const Text('Confirm Emergency'),
+              content: const Text('Are you sure you want to activate emergency mode? Respond within 10 seconds.'),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('No'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(false);
+                  },
+                ),
+                TextButton(
+                  child: const Text('Yes'),
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(true);
+                  },
+                ),
+              ],
+            );
+          },
+        ).timeout(const Duration(seconds: 10));
+      } on TimeoutException {
+        print("Emergency confirmation timed out.");
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).pop(); // Dismiss the dialog
+        }
+        _initiateFakeAutoCallToPolice();
+        return;
+      }
+
+      if (confirmed == true) {
+        print("Emergency sequence ACTIVATED!");
+        if (buttonPressed['location'] == true) {
+          _startSharingLocation();
+        } else {
+          print("Location Sharing feature is not toggled on, so not starting it.");
+        }
+      } else if (confirmed == false) {
+        print("Emergency activation CANCELLED by user.");
+      }
+    } else {
+      print("Emergency trigger received, but Emergency Mode feature is not active.");
+    }
+  }
 
   void _toggleButton(String buttonKey) {
     setState(() {
       buttonPressed[buttonKey] = !buttonPressed[buttonKey]!;
+      if (buttonKey == 'emergency' && buttonPressed['emergency'] == true) {
+        print("Emergency Mode ACTIVATED via button tap.");
+      } else if (buttonKey == 'emergency' && buttonPressed['emergency'] == false) {
+        print("Emergency Mode DEACTIVATED via button tap.");
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    String lastFallDisplayStatus;
+    if (_lastFallTime != null) {
+      lastFallDisplayStatus = DateFormat.yMd().add_jm().format(_lastFallTime!);
+    } else {
+      lastFallDisplayStatus = "Never";
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF36060),
       body: SafeArea(
@@ -495,8 +598,6 @@ Medications: $medications''';
                 children: [
                   GestureDetector(
                     onTap: () {
-                      print(
-                          'HomeScreen onTap Profile: Navigating to /profile with Name: ${widget.name}, Phone: ${widget.phoneNumber}, Email: ${widget.email}, Address: ${widget.address}, BloodType: ${widget.bloodType}, Allergies: ${widget.allergies}, Conditions: ${widget.medicalConditions}, Medications: ${widget.medications}');
                       Navigator.pushNamed(
                         context,
                         '/profile',
@@ -594,7 +695,7 @@ Medications: $medications''';
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 15), 
               Expanded(
                 child: SingleChildScrollView(
                   child: Column(
@@ -642,10 +743,11 @@ Medications: $medications''';
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      _buildStatusCard("Last Fall Detected", "Never"),
+                      const SizedBox(height: 16), // Adjusted from 12 to 16 before status card
+                      // SIMULATE FALL DETECTION BUTTON IS NOW REMOVED
+                      _buildStatusCard("Last Fall Detected", lastFallDisplayStatus),
                       const SizedBox(height: 12),
-                      _buildLockscreenCard(), // This will now use the new logic
+                      _buildLockscreenCard(),
                       const SizedBox(height: 20),
                     ],
                   ),
@@ -839,9 +941,9 @@ Medications: $medications''';
               ),
               const SizedBox(width: 8),
               Switch(
-                value: _isLockscreenAccessEnabled, // Use new state variable
+                value: _isLockscreenAccessEnabled,
                 onChanged: (value) {
-                  _saveSwitchStateAndMedicalInfo(value); // Call new save & notify method
+                  _saveSwitchStateAndMedicalInfo(value);
                 },
                 activeColor: const Color(0xFFDD0000),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
