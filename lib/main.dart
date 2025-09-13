@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart'; // Added for DateFormat
 import 'package:safesync/screens/community/report_screen.dart';
 import 'package:safesync/screens/emergency/emergency_contacts.dart';
@@ -159,6 +160,18 @@ class _MainScreenState extends State<MainScreen> {
 
   bool _didExtractArgs = false;
 
+  // --- Heart Rate State Variables & MethodChannel ---
+  static const platform = MethodChannel('com.fyp.safesync.safesync/heartrate'); //Same channel name  int _heartRate = 0; To store BPM from watch
+  int _heartRate = 0;
+  String _heartStatus = "Connecting...";
+  DateTime? _lastUpdated; // To store the timestamp
+
+  @override
+  void initState() {
+    super.initState();
+    _setupMethodChannelHandler();
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -180,6 +193,36 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  void _setupMethodChannelHandler() {
+    platform.setMethodCallHandler((MethodCall call) async {
+      switch (call.method) {
+        case 'heartRateUpdate':
+          final Map<dynamic, dynamic> data = call.arguments;
+          if (mounted) {
+            setState(() {
+              _heartRate = data['bpm'] as int;
+              _lastUpdated = DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int);
+              if (_heartRate > 0) {
+                _heartStatus = "Watch Connected";
+              } else {
+                _heartStatus = "Watch Connected (No BPM)";
+              }
+              debugPrint('MainScreen received BPM: $_heartRate at $_lastUpdated from watch');
+            });
+          }
+          break;
+        default:
+          debugPrint('MainScreen: Unknown method ${call.method}');
+      }
+    });
+    debugPrint("FLUTTER_DEBUG: !!!! MethodCallHandler for heart rate SET UP in _MainScreenState !!!!");
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   List<Widget> get screens {
     return [
       HomeScreen(
@@ -191,6 +234,10 @@ class _MainScreenState extends State<MainScreen> {
         allergies: _allergies,
         medicalConditions: _medicalConditions,
         medications: _medications,
+        currentHeartRate: _heartRate,
+        currentHeartStatus: _heartStatus,
+        lastWatchUpdate: _lastUpdated,
+
       ),
       const MapScreen(),
       const EmergencyContactsScreen(),
@@ -287,6 +334,10 @@ class HomeScreen extends StatefulWidget {
   final String allergies;
   final String medicalConditions;
   final String medications;
+  final int currentHeartRate;
+  final String currentHeartStatus;
+  final DateTime? lastWatchUpdate;
+
 
   const HomeScreen({
     super.key,
@@ -298,6 +349,10 @@ class HomeScreen extends StatefulWidget {
     required this.allergies,
     required this.medicalConditions,
     required this.medications,
+    required this.currentHeartRate,
+    required this.currentHeartStatus,
+    this.lastWatchUpdate,
+
   });
 
   @override
@@ -439,7 +494,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               AndroidFlutterLocalNotificationsPlugin>();
       if (androidImplementation != null) {
         print('HomeScreen: Requesting Android notification permission...');
-        final bool? granted = await androidImplementation.requestPermission();
+        final bool? granted = await androidImplementation.requestNotificationsPermission();
         print('HomeScreen: Android Notification permission granted: $granted');
       }
     } else if (Theme.of(context).platform == TargetPlatform.iOS) {
@@ -499,11 +554,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final medications = prefs.getString(_prefMedicalMedications) ?? widget.medications;
 
     String fullBody = '''Name: $name
-Emergency Contact: $phone
-Blood Type: $blood
-Allergies: $allergies
-Medical Conditions: $conditions
-Medications: $medications''';
+    Emergency Contact: $phone
+    Blood Type: $blood
+    Allergies: $allergies
+    Medical Conditions: $conditions
+    Medications: $medications''';
     String collapsedSummaryText = 'Name: $name - Tap for medical details';
     print("Showing notification. Collapsed summary: '$collapsedSummaryText'. Full body: '$fullBody'");
 
@@ -644,6 +699,13 @@ Medications: $medications''';
     });
   }
 
+  String _formatDateTimeLocal(DateTime dt) {
+    String hour = dt.hour.toString().padLeft(2, '0');
+    String minute = dt.minute.toString().padLeft(2, '0');
+    String second = dt.second.toString().padLeft(2, '0');
+    return "$hour:$minute:$second";
+  }
+
   @override
   Widget build(BuildContext context) {
     String lastFallDisplayStatus;
@@ -728,7 +790,7 @@ Medications: $medications''';
               ),
               const SizedBox(height: 10),
               Text(
-                '$heartRate BpM',
+                widget.currentHeartRate > 0 ? '${widget.currentHeartRate} BpM' : '-- BpM',
                 style: const TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
@@ -736,12 +798,20 @@ Medications: $medications''';
                 ),
               ),
               Text(
-                'Heart Rate - $heartStatus',
+                'Heart Rate - ${widget.currentHeartStatus}',
                 style: const TextStyle(
                   fontSize: 14,
                   color: Colors.white70,
                 ),
               ),
+              if (widget.lastWatchUpdate != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Text(
+                    'Last Watch Update: ${_formatDateTimeLocal(widget.lastWatchUpdate!)}', // Use local or passed formatted string
+                    style: const TextStyle(fontSize: 10, color: Colors.white60),
+                  ),
+                ),
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
