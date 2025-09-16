@@ -36,10 +36,6 @@ class ShakeDetectionService {
       double accelerationMagnitude = sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2));
       final int currentTimeMillis = DateTime.now().millisecondsSinceEpoch;
 
-      // Log current magnitude and emergency mode status
-      debugPrint(
-          "ShakeDetectionService: Mag: ${accelerationMagnitude.toStringAsFixed(2)}, Emergency Armed: ${isEmergencyModeActive()}");
-
       // Clean up old shake timestamps
       _shakeTimestamps
           .removeWhere((timestamp) => currentTimeMillis - timestamp > _shakeTimeWindowMillis);

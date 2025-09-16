@@ -139,7 +139,7 @@ Medications: $medications''';
               AndroidFlutterLocalNotificationsPlugin>();
       if (androidImplementation != null) {
         debugPrint('LockscreenService: Requesting Android notification permission...');
-        final bool? granted = await androidImplementation.requestPermission();
+        final bool? granted = await androidImplementation.requestNotificationsPermission();
         debugPrint('LockscreenService: Android Notification permission granted: $granted');
       }
     } else if (Theme.of(context).platform == TargetPlatform.iOS) {

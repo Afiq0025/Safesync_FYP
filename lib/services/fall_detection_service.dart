@@ -8,7 +8,7 @@ class FallDetectionService {
   static const double _fallThreshold = 25.0; // m/s^2, adjust as needed
   bool _isFallCooldown = false;
   Timer? _fallCooldownTimer;
-  static const Duration _fallCooldownDuration = Duration(seconds: 5); // Cooldown after a fall is detected
+  static const Duration _fallCooldownDuration = Duration(seconds: 60); // Cooldown after a fall is detected
 
   final Function(DateTime) onFallDetected;
 

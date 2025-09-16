@@ -66,101 +66,123 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF36060),
+      backgroundColor: const Color(0xFFFF6B6B), // Changed background color
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isSmallScreen = constraints.maxWidth < 350;
-            final isLargeScreen = constraints.maxWidth > 600;
-            
-            final padding = EdgeInsets.all(isSmallScreen ? 12.0 : 20.0);
-            final controlSize = isSmallScreen ? 36.0 : 40.0;
-            final controlSpacing = isSmallScreen ? 6.0 : 8.0;
-            final legendPadding = EdgeInsets.all(isSmallScreen ? 8.0 : 12.0);
-            final legendFontSize = isSmallScreen ? 11.0 : 12.0;
-            final legendSpacing = isSmallScreen ? 6.0 : 8.0;
-
-            return Padding(
-              padding: padding,
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(isSmallScreen ? 15 : 20),
-                ),
-                child: Stack(
-                  children: [
-                    // Google Map
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(isSmallScreen ? 15 : 20),
-                      child: GoogleMap(
-                        mapType: MapType.normal,
-                        initialCameraPosition: _kGooglePlex,
-                        markers: _markers,
-                        circles: _circles,
-                        onMapCreated: (GoogleMapController controller) {
-                          _controller.complete(controller);
-                        },
-                        zoomControlsEnabled: false,
-                        myLocationButtonEnabled: true,
-                        compassEnabled: false,
-                        mapToolbarEnabled: false,
-                        buildingsEnabled: true,
-                        trafficEnabled: false,
-                        liteModeEnabled: false,
-                        tiltGesturesEnabled: false,
-                        rotateGesturesEnabled: false,
-                      ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(15),
+              child: Row(
+                children: [
+                  const Text(
+                    'Map',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
                     ),
-                    // Map controls
-                    Positioned(
-                      top: isSmallScreen ? 12.0 : 20.0,
-                      right: isSmallScreen ? 12.0 : 20.0,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
+                  ),
+                ],
+              ),
+            ),
+            // Existing map content (wrapped in Expanded)
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isSmallScreen = constraints.maxWidth < 350;
+                  final isLargeScreen = constraints.maxWidth > 600;
+                  
+                  final padding = EdgeInsets.all(isSmallScreen ? 12.0 : 20.0);
+                  final controlSize = isSmallScreen ? 36.0 : 40.0;
+                  final controlSpacing = isSmallScreen ? 6.0 : 8.0;
+                  final legendPadding = EdgeInsets.all(isSmallScreen ? 8.0 : 12.0);
+                  final legendFontSize = isSmallScreen ? 11.0 : 12.0;
+                  final legendSpacing = isSmallScreen ? 6.0 : 8.0;
+
+                  return Padding(
+                    padding: padding,
+                    child: Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(isSmallScreen ? 15 : 20),
+                      ),
+                      child: Stack(
                         children: [
-                          _buildMapControl(Icons.zoom_in, _zoomIn, controlSize),
-                          SizedBox(height: controlSpacing),
-                          _buildMapControl(Icons.zoom_out, _zoomOut, controlSize),
-                          SizedBox(height: controlSpacing),
-                          _buildMapControl(Icons.my_location, _goToCurrentLocation, controlSize),
+                          // Google Map
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(isSmallScreen ? 15 : 20),
+                            child: GoogleMap(
+                              mapType: MapType.normal,
+                              initialCameraPosition: _kGooglePlex,
+                              markers: _markers,
+                              circles: _circles,
+                              onMapCreated: (GoogleMapController controller) {
+                                _controller.complete(controller);
+                              },
+                              zoomControlsEnabled: false,
+                              myLocationButtonEnabled: true,
+                              compassEnabled: false,
+                              mapToolbarEnabled: false,
+                              buildingsEnabled: true,
+                              trafficEnabled: false,
+                              liteModeEnabled: false,
+                              tiltGesturesEnabled: false,
+                              rotateGesturesEnabled: false,
+                            ),
+                          ),
+                          // Map controls
+                          Positioned(
+                            top: isSmallScreen ? 12.0 : 20.0,
+                            right: isSmallScreen ? 12.0 : 20.0,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _buildMapControl(Icons.zoom_in, _zoomIn, controlSize),
+                                SizedBox(height: controlSpacing),
+                                _buildMapControl(Icons.zoom_out, _zoomOut, controlSize),
+                                SizedBox(height: controlSpacing),
+                                _buildMapControl(Icons.my_location, _goToCurrentLocation, controlSize),
+                              ],
+                            ),
+                          ),
+                          
+                          // Map legend
+                          Positioned(
+                            bottom: isSmallScreen ? 12.0 : 20.0,
+                            left: isSmallScreen ? 12.0 : 20.0,
+                            child: Container(
+                              padding: legendPadding,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(isSmallScreen ? 6 : 8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _buildMapLegend('Safe Zone Area', Colors.green.shade400, legendFontSize),
+                                  SizedBox(height: legendSpacing),
+                                  _buildMapLegend('High-Risk Zone Area', Colors.red.shade400, legendFontSize),
+                                ],
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    
-                    // Map legend
-                    Positioned(
-                      bottom: isSmallScreen ? 12.0 : 20.0,
-                      left: isSmallScreen ? 12.0 : 20.0,
-                      child: Container(
-                        padding: legendPadding,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(isSmallScreen ? 6 : 8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildMapLegend('Safe Zone Area', Colors.green.shade400, legendFontSize),
-                            SizedBox(height: legendSpacing),
-                            _buildMapLegend('High-Risk Zone Area', Colors.red.shade400, legendFontSize),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );

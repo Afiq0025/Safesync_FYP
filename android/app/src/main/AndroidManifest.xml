@@ -36,7 +36,7 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
-            android:name=".MainActivity">
+            android:name="com.fyp.safesync.safesync.MainActivity">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
