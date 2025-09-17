@@ -84,7 +84,6 @@ dependencies:
 
   # Connectivity
   connectivity_plus: ^5.0.1
-  flutter_blue_plus: ^1.0.1
 
 dev_dependencies:
   flutter_test:
