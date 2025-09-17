@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:safesync/screens/community/report.dart'; // Added import
+
+// Report class definition removed from here
 
 class SubmitReportScreen extends StatefulWidget {
   const SubmitReportScreen({Key? key}) : super(key: key);
@@ -10,6 +13,8 @@ class SubmitReportScreen extends StatefulWidget {
 class _SubmitReportScreenState extends State<SubmitReportScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
+  // TODO: Add a TextEditingController for location if you want to make it an input field
+  // final TextEditingController _locationController = TextEditingController();
   
   String selectedDate = 'Jun 10, 2024';
   String selectedTime = '9:41 AM';
@@ -239,7 +244,6 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                               width: double.infinity,
                               child: ElevatedButton(
                                 onPressed: () {
-                                  // Handle submit logic here
                                   _submitReport();
                                 },
                                 style: ElevatedButton.styleFrom(
@@ -308,7 +312,6 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
   }
 
   void _submitReport() {
-    // Handle report submission
     if (_titleController.text.isEmpty || _descriptionController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -319,7 +322,16 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
       return;
     }
 
-    // Show success message and navigate back
+    final newReport = Report(
+      title: _titleController.text,
+      description: _descriptionController.text,
+      dateTime: '$selectedDate • $selectedTime', // Using a bullet for separator
+      tags: List<String>.from(selectedTags), // Create a new list from selectedTags
+      location: 'Unknown Location', // Added default location
+      status: 'Unverified', author: '', // Added default status
+      // author: 'Me', // Defaulted in class
+    );
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Report submitted successfully!'),
@@ -327,13 +339,14 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
       ),
     );
     
-    Navigator.pop(context);
+    Navigator.pop(context, newReport); // Pass the new report back
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    // _locationController.dispose(); // If you add a location field
     super.dispose();
   }
 }

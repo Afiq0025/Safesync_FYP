@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:safesync/models/discussion_post.dart'; // Changed import
 import 'submit_report.dart';
+import 'package:safesync/screens/community/report.dart'; // Import the Report model
+import 'package:intl/intl.dart'; // Import for date formatting
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({Key? key}) : super(key: key);
@@ -10,6 +13,74 @@ class ReportScreen extends StatefulWidget {
 
 class _ReportScreenState extends State<ReportScreen> {
   int _currentTab = 0; // 0: Report, 1: Alert, 2: Discussion
+  List<Report> _reports = [];
+  List<DiscussionPost> _discussionPosts = []; // Store discussion posts
+  final TextEditingController _discussionController = TextEditingController(); // Controller for the TextField
+
+  @override
+  void initState() {
+    super.initState();
+    _reports = [
+      Report(
+        title: 'Suspicious Vehicle Spotted',
+        dateTime: 'May 6, 2025 • 9:15 PM',
+        location: 'Taman Kajang Utama',
+        description: 'A black van was parked for hours with the engine running. No clear activity.',
+        status: 'Unverified',
+        tags: ['Suspicious', 'Night'],
+        author: 'Anonymous',
+      ),
+      Report(
+        title: 'Break-in Attempt',
+        dateTime: 'May 5, 2025 • 2:30 AM',
+        location: 'Jalan Bukit',
+        description: 'Heard someone trying to force open the back door. Dog barked and scared them away.',
+        status: 'Verified',
+        tags: ['Break-in', 'Night'],
+        author: 'Sarah L.',
+      ),
+      Report(
+        title: 'Gathering of Suspicious Individuals',
+        dateTime: 'May 4, 2025 • 7:45 PM',
+        location: 'Near Shell Station',
+        description: 'Group of 5-6 men hanging around for 2+ hours, making residents uncomfortable.',
+        status: 'Under Investigation',
+        tags: ['Suspicious', 'Group'],
+        author: 'Mike T.',
+      ),
+    ];
+
+    _discussionPosts = [
+      DiscussionPost(
+        content: 'Need more street lights on Jalan Bukit. There have been multiple incidents on this street. We need better lighting for safety.',
+        author: 'Sarah L.',
+        dateTime: 'May 6, 2025 • 10:00 AM',
+        likes: 12,
+        comments: 5,
+      ),
+      DiscussionPost(
+        content: 'Managed to get the plate number of that black van: ABC 1234. Should we report to police?',
+        author: 'Mike T.',
+        dateTime: 'May 6, 2025 • 8:30 AM',
+        likes: 8,
+        comments: 3,
+      ),
+      DiscussionPost(
+        content: 'Anyone else experiencing frequent power outages in the Taman Sri Muda area? Its been happening almost daily this week.',
+        author: 'John D.',
+        dateTime: 'May 7, 2025 • 11:15 AM',
+        likes: 5,
+        comments: 2,
+      ),
+      DiscussionPost(
+        content: 'Lets organize a community clean-up drive for next weekend. Our park needs some attention.',
+        author: 'Lisa P.',
+        dateTime: 'May 7, 2025 • 2:00 PM',
+        likes: 15,
+        comments: 7,
+      ),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +89,6 @@ class _ReportScreenState extends State<ReportScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             Container(
               padding: const EdgeInsets.all(15),
               child: Row(
@@ -35,8 +105,6 @@ class _ReportScreenState extends State<ReportScreen> {
                 ],
               ),
             ),
-
-            // Tab Navigation
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 15),
               decoration: BoxDecoration(
@@ -51,8 +119,6 @@ class _ReportScreenState extends State<ReportScreen> {
                 ],
               ),
             ),
-            
-            // Content
             Expanded(
               child: _buildContent(),
             ),
@@ -74,8 +140,8 @@ class _ReportScreenState extends State<ReportScreen> {
           padding: const EdgeInsets.symmetric(vertical: 12),
           margin: const EdgeInsets.all(4),
           decoration: BoxDecoration(
-            color: _currentTab == index 
-                ? Colors.white 
+            color: _currentTab == index
+                ? Colors.white
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
           ),
@@ -108,36 +174,14 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget _buildReportTab() {
     return Stack(
       children: [
-        ListView(
-          padding: const EdgeInsets.fromLTRB(15, 15, 15, 80), // Bottom padding for floating button
-          children: [
-        _buildReportCard(
-          'Suspicious Vehicle Spotted',
-          'May 6, 2025 • 9:15 PM | Taman Kajang Utama',
-          'A black van was parked for hours with the engine running. No clear activity.',
-          'Unverified',
-          ['Suspicious', 'Night'],
-          'Anonymous',
+        ListView.builder(
+          padding: const EdgeInsets.fromLTRB(15, 15, 15, 80),
+          itemCount: _reports.length,
+          itemBuilder: (context, index) {
+            final report = _reports[index];
+            return _buildReportCard(report);
+          },
         ),
-        _buildReportCard(
-          'Break-in Attempt',
-          'May 5, 2025 • 2:30 AM | Jalan Bukit',
-          'Heard someone trying to force open the back door. Dog barked and scared them away.',
-          'Verified',
-          ['Break-in', 'Night'],
-          'Sarah L.',
-        ),
-        _buildReportCard(
-          'Gathering of Suspicious Individuals',
-          'May 4, 2025 • 7:45 PM | Near Shell Station',
-          'Group of 5-6 men hanging around for 2+ hours, making residents uncomfortable.',
-          'Under Investigation',
-          ['Suspicious', 'Group'],
-          'Mike T.',
-        ),
-          ],
-        ),
-        // Floating Submit Report Button
         Positioned(
           bottom: 15,
           left: 15,
@@ -145,13 +189,18 @@ class _ReportScreenState extends State<ReportScreen> {
           child: Container(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {
-                Navigator.push(
+              onPressed: () async {
+                final newReport = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const SubmitReportScreen(),
                   ),
                 );
+                if (newReport != null && newReport is Report) {
+                  setState(() {
+                    _reports.insert(0, newReport);
+                  });
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
@@ -201,26 +250,18 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Widget _buildDiscussionTab() {
-    return ListView(
-      padding: const EdgeInsets.all(15),
+    return Column(
       children: [
-        _buildDiscussionPost(
-          'Need more street lights on Jalan Bukit',
-          'Sarah L. • 2 hours ago',
-          'There have been multiple incidents on this street. We need better lighting for safety.',
-          12,
-          5,
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(15),
+            itemCount: _discussionPosts.length,
+            itemBuilder: (context, index) {
+              final post = _discussionPosts[index];
+              return _buildDiscussionPostCard(post);
+            },
+          ),
         ),
-        _buildDiscussionPost(
-          'Suspicious vehicle license plate number',
-          'Mike T. • 4 hours ago',
-          'Managed to get the plate number of that black van: ABC 1234. Should we report to police?',
-          8,
-          3,
-        ),
-        const SizedBox(height: 20),
-        
-        // Write your thought section
         Container(
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
@@ -246,6 +287,7 @@ class _ReportScreenState extends State<ReportScreen> {
               ),
               const SizedBox(height: 10),
               TextField(
+                controller: _discussionController, // Use the controller
                 maxLines: 3,
                 decoration: InputDecoration(
                   hintText: 'Share your thoughts with the community...',
@@ -260,7 +302,19 @@ class _ReportScreenState extends State<ReportScreen> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   ElevatedButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      if (_discussionController.text.isNotEmpty) {
+                        final newPost = DiscussionPost(
+                          content: _discussionController.text,
+                          author: 'Current User', // Replace with actual user later
+                          dateTime: DateFormat('MMM d, yyyy • hh:mm a').format(DateTime.now()),
+                        );
+                        setState(() {
+                          _discussionPosts.insert(0, newPost);
+                          _discussionController.clear(); // Clear the TextField
+                        });
+                      }
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
@@ -279,7 +333,7 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _buildReportCard(String title, String subtitle, String description, String status, List<String> tags, String author) {
+  Widget _buildReportCard(Report report) {
     return Card(
       margin: const EdgeInsets.only(bottom: 15),
       shape: RoundedRectangleBorder(
@@ -292,26 +346,26 @@ class _ReportScreenState extends State<ReportScreen> {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start, // Added for better alignment if title wraps
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded( // Wrapped the Text widget with Expanded
+                Expanded(
                   child: Text(
-                    title,
+                    report.title,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8), // Added some spacing
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(status),
+                    color: _getStatusColor(report.status),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    status,
+                    report.status,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12,
@@ -322,18 +376,18 @@ class _ReportScreenState extends State<ReportScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              subtitle,
+              '${report.dateTime} | ${report.location}',
               style: TextStyle(
                 color: Colors.grey[600],
                 fontSize: 14,
               ),
             ),
             const SizedBox(height: 12),
-            Text(description),
+            Text(report.description),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
-              children: tags.map((tag) => Chip(
+              children: report.tags.map((tag) => Chip(
                 label: Text(tag),
                 backgroundColor: Colors.grey[200],
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -341,7 +395,7 @@ class _ReportScreenState extends State<ReportScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Reported by: $author',
+              'Reported by: ${report.author}',
               style: const TextStyle(
                 fontStyle: FontStyle.italic,
                 color: Colors.grey,
@@ -353,7 +407,7 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _buildAlertCard(String title, String location, String description, String urgency, List<String> tags) {
+   Widget _buildAlertCard(String title, String location, String description, String urgency, List<String> tags) {
     return Card(
       margin: const EdgeInsets.only(bottom: 15),
       shape: RoundedRectangleBorder(
@@ -368,7 +422,7 @@ class _ReportScreenState extends State<ReportScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded( // Also wrapped title here for consistency and safety
+                Expanded(
                   child: Text(
                     title,
                     style: const TextStyle(
@@ -377,7 +431,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8), // Added some spacing
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
@@ -419,7 +473,7 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _buildDiscussionPost(String title, String author, String content, int likes, int comments) {
+  Widget _buildDiscussionPostCard(DiscussionPost post) { // Renamed and updated to use DiscussionPost model
     return Card(
       margin: const EdgeInsets.only(bottom: 15),
       shape: RoundedRectangleBorder(
@@ -430,39 +484,46 @@ class _ReportScreenState extends State<ReportScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text( // Consider wrapping this with Expanded if titles can be very long
-              title,
+            Text(
+              post.content, // Use post.content
               style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+                fontSize: 15,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
-              author,
+              '${post.author} • ${post.dateTime}', // Use post.author and post.dateTime
               style: TextStyle(
                 color: Colors.grey[600],
-                fontSize: 14,
+                fontSize: 13,
               ),
             ),
-            const SizedBox(height: 12),
-            Text(content),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Row(
               children: [
                 IconButton(
                   icon: const Icon(Icons.thumb_up_outlined),
-                  onPressed: () {},
+                  onPressed: () {
+                    setState(() {
+                      post.likes++;
+                    });
+                  },
                   iconSize: 20,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
-                Text('$likes'),
+                const SizedBox(width: 4),
+                Text('${post.likes}'),
                 const SizedBox(width: 20),
                 IconButton(
                   icon: const Icon(Icons.comment_outlined),
                   onPressed: () {},
                   iconSize: 20,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
-                Text('$comments'),
+                 const SizedBox(width: 4),
+                Text('${post.comments}'),
               ],
             ),
           ],
@@ -482,5 +543,11 @@ class _ReportScreenState extends State<ReportScreen> {
       default:
         return Colors.blue;
     }
+  }
+
+  @override
+  void dispose() {
+    _discussionController.dispose(); // Dispose the controller
+    super.dispose();
   }
 }

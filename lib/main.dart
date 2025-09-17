@@ -28,6 +28,7 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
 Future<void> main() async { // Make main async
+  print("--- MAIN.DART: main() function HAS STARTED ---"); // Add this line
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize flutter_local_notifications
