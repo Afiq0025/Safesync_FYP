@@ -53,6 +53,8 @@
     <string>This app needs camera access to capture evidence for incident reports.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>This app needs microphone access for emergency voice detection.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>This app needs speech recognition access to understand voice commands.</string>
     <key>NSContactsUsageDescription</key>
     <string>This app needs contact access to manage emergency contacts.</string>
     <key>NSHealthShareUsageDescription</key>

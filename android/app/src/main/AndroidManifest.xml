@@ -1,20 +1,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Basic permissions -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.BODY_SENSORS" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Location permissions for geolocator plugin -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />"
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+
 
     <application
         android:label="SafeSync"
@@ -28,7 +31,7 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@style/LaunchTheme"
-            android:name="MainActivity">
+            android:name="com.fyp.safesync.safesync.MainActivity">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
@@ -44,15 +47,15 @@
             android:name=".DataLayerListenerService"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
-                <data android:scheme="wear" android:host="*" android:pathPrefix="/heartRate" />
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED"/>
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/heartRate"/>
             </intent-filter>
         </service>
 
         <!-- Google Maps API Key (replace value with your actual key) -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyDUd1e6m3iuRO-QuU_fZbFClT2G8o-GjSc"/>
+            android:value=""/>
 
         <!-- Flutter Embedding -->
         <meta-data

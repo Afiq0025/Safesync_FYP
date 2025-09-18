@@ -19,11 +19,21 @@ import 'dart:math'; // For sqrt, pow
 import 'package:provider/provider.dart';
 import 'providers/battery_provider.dart';
 
-// Initialize the plugin instance object
-FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+// Services
+import 'services/fall_detection_service.dart';
+import 'services/shake_detection_service.dart'; // Import the new service
+import 'services/emergency_service.dart';
+import 'services/lockscreen_service.dart';
+import 'services/location_service.dart';
+import 'services/auto_call_service.dart';
+
+// Initialize flutter_local_notifications plugin instance globally
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
-Future<void> main() async {
+
+Future<void> main() async { // Make main async
+  print("--- MAIN.DART: main() function HAS STARTED ---");
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize flutter_local_notifications
@@ -352,7 +362,6 @@ class HomeScreen extends StatefulWidget {
   final DateTime? lastWatchUpdate;
   final int currentBatteryLevel;
 
-
   const HomeScreen({
     super.key,
     required this.name,
@@ -367,7 +376,6 @@ class HomeScreen extends StatefulWidget {
     required this.currentHeartStatus,
     required this.currentBatteryLevel,
     this.lastWatchUpdate,
-
   });
 
   @override
@@ -382,324 +390,100 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Map<String, bool> buttonPressed = {
     'emergency': false,
-    'voice': false,
-    'call': false,
-    'location': false,
+    'voice': false,     // AI Voice Recognition - Placeholder
+    'call': false,      // Auto Call - Placeholder
+    'location': false,  // Location Sharing - Placeholder
   };
 
-  static const String _prefLockscreenAccessKey = 'lockscreenAccessEnabled';
-  static const String _prefMedicalName = 'medicalName';
-  static const String _prefMedicalPhoneNumber = 'medicalPhoneNumber';
-  static const String _prefMedicalBloodType = 'medicalBloodType';
-  static const String _prefMedicalAllergies = 'medicalAllergies';
-  static const String _prefMedicalConditions = 'medicalConditions';
-  static const String _prefMedicalMedications = 'medicalMedications';
-  static const int _medicalInfoNotificationId = 0;
-
-  // For Fall Detection
-  StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
-  static const double _fallThreshold = 25.0; // m/s^2 - Needs tuning!
-  bool _isFallCooldown = false;
-  Timer? _fallCooldownTimer;
-
-  // For Shake Detection
-  static const double _shakeThreshold = 30.0; // m/s^2 - Needs tuning for shake vs fall
-  static const int _shakeCountThreshold = 3;    // Number of shakes needed
-  static const int _shakeTimeWindowMillis = 2000; // 2 seconds window for the shakes
-  List<int> _shakeTimestamps = []; // Stores timestamps of qualifying shake events
-  bool _isShakeCooldownActive = false;
-  Timer? _shakeCooldownTimer;
-  static const Duration _shakeCooldownDuration = Duration(seconds: 10); // Cooldown after trigger
-
+  // Services
+  late FallDetectionService _fallDetectionService;
+  late ShakeDetectionService _shakeDetectionService; // Declare ShakeDetectionService
+  late EmergencyService _emergencyService;
+  late LockscreenService _lockscreenService;
+  late LocationService _locationService;
+  late AutoCallService _autoCallService;
 
   @override
   void initState() {
     super.initState();
-    _requestNotificationPermissions();
-    _loadSwitchStateAndShowNotification();
-    _initAccelerometer(); // Initialize accelerometer for fall and shake
+    // Initialize services
+    _locationService = LocationService();
+    _autoCallService = AutoCallService();
+
+    _lockscreenService = LockscreenService(
+      flutterLocalNotificationsPlugin: flutterLocalNotificationsPlugin, // Pass the global instance
+      getName: () => widget.name,
+      getPhoneNumber: () => widget.phoneNumber,
+      getBloodType: () => widget.bloodType,
+      getAllergies: () => widget.allergies,
+      getMedicalConditions: () => widget.medicalConditions,
+      getMedications: () => widget.medications,
+    );
+    _lockscreenService.requestPermissions(context);
+    _loadLockscreenState();
+
+    _emergencyService = EmergencyService(
+      context: context,
+      isLocationSharingActive: () => buttonPressed['location'] ?? false,
+      onStartLocationSharing: _locationService.startSharingLocation,
+      onInitiateAutoCall: _autoCallService.initiateFakeAutoCallToPolice,
+      isEmergencyButtonActive: () => buttonPressed['emergency'] ?? false,
+    );
+
+    _fallDetectionService = FallDetectionService(
+      onFallDetected: _updateLastFallDetected,
+    );
+    _fallDetectionService.initAccelerometer();
+
+    _shakeDetectionService = ShakeDetectionService(
+      onShakeDetectedVigorous: _handleVigorousShake,
+      isEmergencyModeActive: () => buttonPressed['emergency'] ?? false,
+    );
+    _shakeDetectionService.initAccelerometer();
+  }
+
+  void _handleVigorousShake() {
+    if (mounted) {
+      debugPrint("HomeScreen: Vigorous shake detected via ShakeDetectionService. Triggering emergency.");
+      _emergencyService.handleEmergencyTrigger();
+    }
+  }
+
+  Future<void> _loadLockscreenState() async {
+    await _lockscreenService.loadSwitchStateAndShowNotification();
+    if (mounted) {
+      // Corrected the setState call for _isLockscreenAccessEnabled
+      bool isEnabled = await _lockscreenService.isLockscreenAccessEnabled();
+      setState(() {
+        _isLockscreenAccessEnabled = isEnabled;
+      });
+    }
+  }
+
+  Future<void> _saveLockscreenState(bool isEnabled) async {
+    await _lockscreenService.saveSwitchStateAndMedicalInfo(isEnabled);
+    if (mounted) {
+      setState(() {
+        _isLockscreenAccessEnabled = isEnabled;
+      });
+    }
   }
 
   @override
   void dispose() {
-    _accelerometerSubscription?.cancel();
-    _fallCooldownTimer?.cancel();
-    _shakeCooldownTimer?.cancel(); // Cancel shake cooldown timer
+    _fallDetectionService.dispose();
+    _shakeDetectionService.dispose(); // Dispose ShakeDetectionService
     super.dispose();
   }
 
-  void _initAccelerometer() {
-    _accelerometerSubscription = accelerometerEvents.listen((AccelerometerEvent event) {
-      double x = event.x;
-      double y = event.y;
-      double z = event.z;
-      double accelerationMagnitude = sqrt(pow(x, 2) + pow(y, 2) + pow(z, 2));
-      final int currentTimeMillis = DateTime.now().millisecondsSinceEpoch;
-
-      // Fall Detection Logic
-      if (!_isFallCooldown && accelerationMagnitude > _fallThreshold) {
-        print('Potential fall detected! Magnitude: $accelerationMagnitude');
-        if (mounted) {
-          _updateLastFallDetected(DateTime.now());
-          setState(() {
-            _isFallCooldown = true;
-          });
-          _fallCooldownTimer?.cancel();
-          _fallCooldownTimer = Timer(const Duration(seconds: 5), () {
-            if (mounted) {
-              setState(() {
-                _isFallCooldown = false;
-              });
-            }
-          });
-        }
-      }
-
-      // Shake Detection Logic
-      // Remove old timestamps that are outside the shake window
-      _shakeTimestamps.removeWhere((timestamp) => currentTimeMillis - timestamp > _shakeTimeWindowMillis);
-
-      if (accelerationMagnitude > _shakeThreshold) {
-        // Only add if it's not too close to the last event to avoid counting one shake multiple times
-        if (_shakeTimestamps.isEmpty || (currentTimeMillis - _shakeTimestamps.last > 250) ) { // 250ms debounce
-            _shakeTimestamps.add(currentTimeMillis);
-            print('Shake event registered. Count: ${_shakeTimestamps.length}, Mag: $accelerationMagnitude');
-        }
-
-
-        if (_shakeTimestamps.length >= _shakeCountThreshold) {
-          if (!_isShakeCooldownActive && buttonPressed['emergency'] == true) {
-            print('Vigorous SHAKE DETECTED and Emergency Mode is ON!');
-            if(mounted) _handleEmergencyTrigger(); // Ensure widget is mounted
-            _shakeTimestamps.clear(); // Clear timestamps after triggering
-            setState(() {
-              _isShakeCooldownActive = true;
-            });
-            _shakeCooldownTimer?.cancel();
-            _shakeCooldownTimer = Timer(_shakeCooldownDuration, () {
-              print('Shake cooldown finished.');
-              if (mounted) {
-                setState(() {
-                  _isShakeCooldownActive = false;
-                });
-              }
-            });
-          } else if (_isShakeCooldownActive) {
-            // print('Shake detected, but in cooldown.'); // Can be noisy
-          } else if (buttonPressed['emergency'] != true) {
-            // print('Shake detected, but Emergency Mode is OFF.'); // Can be noisy
-            _shakeTimestamps.clear(); // Clear if emergency mode is off to prevent build-up
-          }
-        }
-      }
-    });
-  }
-
   void _updateLastFallDetected(DateTime fallTime) {
-    setState(() {
-      _lastFallTime = fallTime;
-    });
-    print("Fall detected at: $fallTime. UI should update.");
-  }
-
-  Future<void> _requestNotificationPermissions() async {
-    if (Theme.of(context).platform == TargetPlatform.android) {
-      final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
-          flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
-      if (androidImplementation != null) {
-        print('HomeScreen: Requesting Android notification permission...');
-        final bool? granted = await androidImplementation.requestNotificationsPermission();
-        print('HomeScreen: Android Notification permission granted: $granted');
-      }
-    } else if (Theme.of(context).platform == TargetPlatform.iOS) {
-      print('HomeScreen: Requesting iOS notification permissions...');
-      final bool? resultIOS = await flutterLocalNotificationsPlugin
-          .resolvePlatformSpecificImplementation<
-              IOSFlutterLocalNotificationsPlugin>()
-          ?.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          );
-      print("HomeScreen: iOS Notification permission granted: $resultIOS");
-    }
-  }
-
-  Future<void> _loadSwitchStateAndShowNotification() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isLockscreenAccessEnabled = prefs.getBool(_prefLockscreenAccessKey) ?? false;
-    });
-    if (_isLockscreenAccessEnabled) {
-      print("Lockscreen access was enabled, showing notification on load.");
-      await _showMedicalInfoNotification();
-    }
-  }
-
-  Future<void> _saveSwitchStateAndMedicalInfo(bool isEnabled) async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _isLockscreenAccessEnabled = isEnabled;
-    });
-    await prefs.setBool(_prefLockscreenAccessKey, isEnabled);
-
-    if (isEnabled) {
-      print("Saving medical info and showing notification.");
-      await prefs.setString(_prefMedicalName, widget.name);
-      await prefs.setString(_prefMedicalPhoneNumber, widget.phoneNumber);
-      await prefs.setString(_prefMedicalBloodType, widget.bloodType);
-      await prefs.setString(_prefMedicalAllergies, widget.allergies);
-      await prefs.setString(_prefMedicalConditions, widget.medicalConditions);
-      await prefs.setString(_prefMedicalMedications, widget.medications);
-      await _showMedicalInfoNotification();
-    } else {
-      print("Cancelling notification.");
-      await _cancelMedicalInfoNotification();
-    }
-  }
-
-  Future<void> _showMedicalInfoNotification() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    final name = prefs.getString(_prefMedicalName) ?? widget.name;
-    final phone = prefs.getString(_prefMedicalPhoneNumber) ?? widget.phoneNumber;
-    final blood = prefs.getString(_prefMedicalBloodType) ?? widget.bloodType;
-    final allergies = prefs.getString(_prefMedicalAllergies) ?? widget.allergies;
-    final conditions = prefs.getString(_prefMedicalConditions) ?? widget.medicalConditions;
-    final medications = prefs.getString(_prefMedicalMedications) ?? widget.medications;
-
-    String fullBody = '''Name: $name
-    Emergency Contact: $phone
-    Blood Type: $blood
-    Allergies: $allergies
-    Medical Conditions: $conditions
-    Medications: $medications''';
-    String collapsedSummaryText = 'Name: $name - Tap for medical details';
-    print("Showing notification. Collapsed summary: '$collapsedSummaryText'. Full body: '$fullBody'");
-
-    final BigTextStyleInformation bigTextStyleInformation = BigTextStyleInformation(
-      fullBody,
-      htmlFormatBigText: false,
-      contentTitle: 'Medical Information (Full)',
-      htmlFormatContentTitle: false,
-      summaryText: 'Medical Details',
-      htmlFormatSummaryText: false,
-    );
-
-    final AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
-      'medical_info_channel',
-      'Medical Information',
-      channelDescription: 'Displays critical medical information on lockscreen.',
-      importance: Importance.max,
-      priority: Priority.high,
-      ongoing: true,
-      autoCancel: false,
-      styleInformation: bigTextStyleInformation,
-    );
-    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
-        DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
-    final NotificationDetails platformChannelSpecifics = NotificationDetails(
-        android: androidPlatformChannelSpecifics, iOS: iOSPlatformChannelSpecifics);
-
-    try {
-      await flutterLocalNotificationsPlugin.show(
-        _medicalInfoNotificationId,
-        'Medical Information Access Enabled',
-        collapsedSummaryText,
-        platformChannelSpecifics,
-        payload: 'MedicalInfoNotification',
-      );
-      print("Notification shown successfully.");
-    } catch (e) {
-      print("Error showing notification: $e");
-    }
-  }
-
-  Future<void> _cancelMedicalInfoNotification() async {
-    await flutterLocalNotificationsPlugin.cancel(_medicalInfoNotificationId);
-    print("Notification cancelled.");
-  }
-
-  void _initiateFakeAutoCallToPolice() {
-    print("AUTO-CALL: Simulating call to nearest police station due to no response.");
-  }
-
-  void _startSharingLocation() {
-    print("LOCATION SHARING: User's location is now being actively shared.");
-  }
-
-  Future<void> _handleEmergencyTrigger() async {
-    if (buttonPressed['emergency'] != true) {
-        print("_handleEmergencyTrigger called, but Emergency Mode feature is not active. No dialog shown.");
-        return;
-    }
-    // Prevent multiple dialogs if already one is showing due to rapid triggers
-    if (ModalRoute.of(context)?.isCurrent != true) {
-      // Assuming the dialog is a new route, if it's not the current one, another might be active
-      // This is a simple check; more robust dialog management might be needed.
-      // However, the cooldowns (fall and shake) should largely prevent this.
-    }
-
-
-    bool? confirmed;
-    try {
-      // Ensure context is valid and widget is mounted before showing dialog
-      if (!mounted) return;
-
-      confirmed = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext dialogContext) {
-          return AlertDialog(
-            title: const Text('Confirm Emergency'),
-            content: const Text('Are you sure you want to activate emergency mode? Respond within 10 seconds.'),
-            actions: <Widget>[
-              TextButton(
-                child: const Text('No'),
-                onPressed: () {
-                  if(Navigator.of(dialogContext).canPop()) Navigator.of(dialogContext).pop(false);
-                },
-              ),
-              TextButton(
-                child: const Text('Yes'),
-                onPressed: () {
-                  if(Navigator.of(dialogContext).canPop()) Navigator.of(dialogContext).pop(true);
-                },
-              ),
-            ],
-          );
-        },
-      ).timeout(const Duration(seconds: 10));
-    } on TimeoutException {
-      print("Emergency confirmation timed out.");
-      if (mounted) {
-        // Only pop if the dialog is still visible and context is valid
-        if (Navigator.of(context, rootNavigator: true).canPop()) {
-            Navigator.of(context, rootNavigator: true).pop();
-        }
-      }
-      _initiateFakeAutoCallToPolice();
-      return;
-    } catch (e) {
-      print("Error showing dialog: $e");
-      return; // Don't proceed if dialog couldn't be shown
-    }
-
-
-    if (confirmed == true) {
-      print("Emergency sequence ACTIVATED!");
-      if (buttonPressed['location'] == true) {
-        _startSharingLocation();
-      } else {
-        print("Location Sharing feature is not toggled on, so not starting it.");
-      }
-    } else if (confirmed == false) {
-      print("Emergency activation CANCELLED by user.");
+    if (mounted) {
+      setState(() {
+        _lastFallTime = fallTime;
+      });
+      debugPrint("HomeScreen: Fall detected at: $fallTime. UI should update.");
+       // Potentially trigger emergency service if a fall is confirmed by other sensors/logic in future
+      // For now, it just updates the UI.
     }
   }
 
@@ -707,9 +491,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() {
       buttonPressed[buttonKey] = !buttonPressed[buttonKey]!;
       if (buttonKey == 'emergency' && buttonPressed['emergency'] == true) {
-        print("Emergency Mode ACTIVATED via button tap.");
+        debugPrint("HomeScreen: Emergency Mode ARMED via button tap. Shake to activate.");
+        // NOTE: No direct call to _emergencyService.handleEmergencyTrigger() here anymore.
+        // Activation is now via shake when this button is true.
       } else if (buttonKey == 'emergency' && buttonPressed['emergency'] == false) {
-        print("Emergency Mode DEACTIVATED via button tap.");
+        debugPrint("HomeScreen: Emergency Mode DISARMED via button tap.");
       }
     });
   }
@@ -813,8 +599,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               const SizedBox(height: 10),
               Text(
-                widget.currentHeartRate > 0 ? '${widget.currentHeartRate} BpM' : '-- BpM',
-                style: const TextStyle(
+                widget.currentHeartRate > 0 ? '${widget.currentHeartRate} BpM' : '-- BpM',                style: const TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
@@ -1101,9 +886,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               const SizedBox(width: 8),
               Switch(
                 value: _isLockscreenAccessEnabled,
-                onChanged: (value) {
-                  _saveSwitchStateAndMedicalInfo(value);
-                },
+                onChanged: _saveLockscreenState, // Updated to use the new method
                 activeColor: const Color(0xFFDD0000),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
