@@ -14,6 +14,10 @@ import 'screens/home/pair_smart_devices.dart';
 import 'screens/map/map_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:sensors_plus/sensors_plus.dart'; // For Fall Detection & Shake
+import 'dart:math'; // For sqrt, pow
+import 'package:provider/provider.dart';
+import 'providers/battery_provider.dart';
 
 // Services
 import 'services/fall_detection_service.dart';
@@ -27,13 +31,14 @@ import 'services/auto_call_service.dart';
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
+
 Future<void> main() async { // Make main async
-  print("--- MAIN.DART: main() function HAS STARTED ---"); // Add this line
+  print("--- MAIN.DART: main() function HAS STARTED ---");
   WidgetsFlutterBinding.ensureInitialized();
 
   // Initialize flutter_local_notifications
   const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/ic_launcher'); // Use your app icon
+      AndroidInitializationSettings('@mipmap/ic_launcher');
   final DarwinInitializationSettings initializationSettingsDarwin =
       DarwinInitializationSettings(
           onDidReceiveLocalNotification: (id, title, body, payload) async {
@@ -156,6 +161,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int currentIndex = 0;
+  int _batteryLevel = 0;
   String _name = "User Name";
   String _phoneNumber = "N/A";
   String _email = "N/A";
@@ -218,6 +224,15 @@ class _MainScreenState extends State<MainScreen> {
             });
           }
           break;
+        case 'batteryUpdate':
+          final Map<dynamic, dynamic> data = call.arguments;
+          if (mounted) {
+            setState(() {
+              _batteryLevel = data['battery'] as int;
+              // Optionally store timestamp if needed
+            });
+          }
+          break;
         default:
           debugPrint('MainScreen: Unknown method ${call.method}');
       }
@@ -244,6 +259,8 @@ class _MainScreenState extends State<MainScreen> {
         currentHeartRate: _heartRate,
         currentHeartStatus: _heartStatus,
         lastWatchUpdate: _lastUpdated,
+        currentBatteryLevel: _batteryLevel,
+
       ),
       const MapScreen(),
       const EmergencyContactsScreen(),
@@ -343,6 +360,7 @@ class HomeScreen extends StatefulWidget {
   final int currentHeartRate;
   final String currentHeartStatus;
   final DateTime? lastWatchUpdate;
+  final int currentBatteryLevel;
 
   const HomeScreen({
     super.key,
@@ -356,6 +374,7 @@ class HomeScreen extends StatefulWidget {
     required this.medications,
     required this.currentHeartRate,
     required this.currentHeartStatus,
+    required this.currentBatteryLevel,
     this.lastWatchUpdate,
   });
 
@@ -543,7 +562,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     children: [
                       GestureDetector(
                         onTap: () {
-                          Navigator.pushNamed(context, '/smartwatch');
+                          Navigator.pushNamed(
+                            context,
+                            '/smartwatch',
+                            arguments: {
+                              'heartRate': widget.currentHeartRate,
+                              'connectionStatus': widget.currentHeartStatus,
+                              'batteryLevel': widget.currentBatteryLevel,
+                            },
+                          );
                         },
                         child: Container(
                           width: 45,

@@ -41,7 +41,6 @@ class DataLayerListenerService : WearableListenerService() {
                         val heartRateData = mapOf("bpm" to bpm, "timestamp" to timestamp)
 
                         Handler(Looper.getMainLooper()).post {
-                            // Send to Flutter if ready, else buffer
                             MainActivity.channel?.let {
                                 Log.e(TAG, "SUCCESS: Sending BPM to Flutter via MethodChannel")
                                 it.invokeMethod("heartRateUpdate", heartRateData)
@@ -51,7 +50,24 @@ class DataLayerListenerService : WearableListenerService() {
                             }
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error processing data item: ${dataItem.uri}", e)
+                        Log.e(TAG, "Error processing heart rate data item: ${dataItem.uri}", e)
+                    }
+                } else if (dataItem.uri.path.equals("/batteryLevel", ignoreCase = true)) {
+                    try {
+                        val dataMap = DataMapItem.fromDataItem(dataItem).dataMap
+                        val battery = dataMap.getInt("battery")
+                        val timestamp = dataMap.getLong("timestamp")
+                        Log.e(TAG, "Received Battery from watch: $battery%, Timestamp: $timestamp")
+
+                        val batteryData = mapOf("battery" to battery, "timestamp" to timestamp)
+
+                        Handler(Looper.getMainLooper()).post {
+                            MainActivity.channel?.let {
+                                it.invokeMethod("batteryUpdate", batteryData)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error processing battery data item: ${dataItem.uri}", e)
                     }
                 } else {
                     Log.w(TAG, "Received data item with UNEXPECTED PATH: ${dataItem.uri.path}")

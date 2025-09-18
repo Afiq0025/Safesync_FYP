@@ -5,8 +5,21 @@ class SmartwatchDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+
+    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+    final heartRate = args?['heartRate'] as int? ?? 0;
+    final connectionStatus = args?['connectionStatus'] as String? ?? 'Not Connected';
+    final batteryLevel = args?['batteryLevel'] as int? ?? 0;
+
+    final isConnected = connectionStatus == 'Watch Connected' && heartRate > 0;
+    final statusText = isConnected
+        ? 'Current Heart Rate: $heartRate BpM\nBattery Level: $batteryLevel %\nConnection Status: Connected'
+        : 'Connection Status: Not Connected';
+
+
     return Scaffold(
       backgroundColor: const Color(0xFFF36A6A),
       body: SafeArea(
@@ -49,10 +62,10 @@ class SmartwatchDetailScreen extends StatelessWidget {
                   ),
                 ),
                 SizedBox(height: screenHeight * 0.04),
-                const Text(
-                  'Current Hear Rate : 79 BpM\nBattery Level         : 85 %\nConnection Status : Connected',
+                Text(
+                  statusText,
                   textAlign: TextAlign.left,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 20,
                     color: Colors.white,
                     fontFamily: 'Serif',
