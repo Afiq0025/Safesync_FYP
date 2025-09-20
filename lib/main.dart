@@ -18,7 +18,7 @@ import 'package:sensors_plus/sensors_plus.dart'; // For Fall Detection & Shake
 import 'dart:math'; // For sqrt, pow
 import 'package:provider/provider.dart';
 import 'providers/battery_provider.dart';
-
+//test
 // Services
 import 'services/fall_detection_service.dart';
 import 'services/shake_detection_service.dart'; // Import the new service
