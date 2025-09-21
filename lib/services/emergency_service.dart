@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Added for HapticFeedback
+import '../screens/fake_call_page.dart'; // Import for FakeCallPage
 
 class EmergencyService {
   final BuildContext context;
@@ -23,6 +25,9 @@ class EmergencyService {
     }
 
     // Check if a dialog is already active to prevent stacking (simple check)
+    // It's important to use a context that can find the Navigator.
+    // If 'context' is from a widget deep in the tree, this check might be problematic.
+    // Consider using a GlobalKey<NavigatorState> if issues arise.
     if (ModalRoute.of(context)?.isCurrent != true) {
       debugPrint("EmergencyService: Another route is current, potentially a dialog. Aborting.");
       return;
@@ -32,6 +37,7 @@ class EmergencyService {
     try {
       if (!Navigator.of(context).mounted) return; // Ensure context is valid
 
+      HapticFeedback.heavyImpact(); // Vibration when dialog appears
       confirmed = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
@@ -58,10 +64,17 @@ class EmergencyService {
       ).timeout(const Duration(seconds: 10));
     } on TimeoutException {
       debugPrint("EmergencyService: Confirmation timed out.");
+      // Ensure the dialog is dismissed before navigating.
+      // Use rootNavigator: true if the dialog was shown with it, or if navigating from a context that isn't the primary navigator.
       if (Navigator.of(context).mounted && Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop(); // Dismiss timeout dialog if it was shown
+        Navigator.of(context, rootNavigator: true).pop(); 
       }
-      onInitiateAutoCall();
+      
+      // Navigate to FakeCallPage on timeout
+      if (Navigator.of(context).mounted) { // Check again if context is still valid
+        Navigator.push(context, MaterialPageRoute(builder: (context) => const FakeCallPage()));
+      }
+      onInitiateAutoCall(); // Initiate auto call
       return;
     } catch (e) {
       debugPrint("EmergencyService: Error showing dialog: $e");
@@ -70,6 +83,12 @@ class EmergencyService {
 
     if (confirmed == true) {
       debugPrint("EmergencyService: Emergency sequence ACTIVATED!");
+      // Navigate to FakeCallPage on "Yes"
+      if (Navigator.of(context).mounted) { // Check if context is still valid
+         Navigator.push(context, MaterialPageRoute(builder: (context) => const FakeCallPage()));
+      }
+      onInitiateAutoCall(); // Initiate auto call
+
       if (isLocationSharingActive()) {
         onStartLocationSharing();
       } else {

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // <<<--- ADD THIS IMPORT
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({Key? key}) : super(key: key);
@@ -23,6 +25,8 @@ class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController _medicationsController = TextEditingController();
 
   bool _isLoading = false;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance; // Added Firestore instance
 
   Future<void> _createAccount() async {
     if (_formKey.currentState!.validate()) {
@@ -30,42 +34,90 @@ class _SignupScreenState extends State<SignupScreen> {
         _isLoading = true;
       });
 
-      // Mock account creation
-      await Future.delayed(const Duration(seconds: 2));
+      try {
+        final String email = _emailController.text.trim();
+        final String password = _passwordController.text.trim();
+        final String fullName = _fullNameController.text.trim();
+        final String phoneNumber = _phoneController.text.trim();
+        final String address = _addressController.text.trim();
+        final String bloodType = _bloodTypeController.text.trim();
+        final String allergies = _allergiesController.text.trim();
+        final String medicalConditions = _medicalConditionsController.text.trim();
+        final String medications = _medicationsController.text.trim();
 
-      setState(() {
-        _isLoading = false;
-      });
+        UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
 
-      if (mounted) {
-        final String fullName = _fullNameController.text;
-        final String phoneNumber = _phoneController.text;
-        final String email = _emailController.text;
-        final String password = _passwordController.text; // <-- Added
-        final String address = _addressController.text;
-        final String bloodType = _bloodTypeController.text;
-        final String allergies = _allergiesController.text;
-        final String medicalConditions = _medicalConditionsController.text;
-        final String medications = _medicationsController.text;
+        User? user = userCredential.user;
 
-        // Updated print statement to include password (for debugging)
-        print('SignupScreen: Navigating to /login with Name: $fullName, Phone: $phoneNumber, Email: $email, Password: $password, Address: $address, BloodType: $bloodType, Allergies: $allergies, Conditions: $medicalConditions, Medications: $medications');
+        if (user != null) {
+          debugPrint("Firebase Signup successful: Auth UID: ${user.uid}");
 
-        Navigator.pushReplacementNamed(
-          context,
-          '/login', // <-- Changed to /login
-          arguments: {
-            'name': fullName,
+          // Save additional user details to Cloud Firestore
+          await _firestore.collection('users').doc(user.uid).set({
+            'uid': user.uid, // Storing UID for convenience, though doc ID is UID
+            'fullName': fullName,
             'phoneNumber': phoneNumber,
-            'email': email,
-            'password': password, // <-- Added password
+            'email': email, // Storing email for convenience
             'address': address,
             'bloodType': bloodType,
             'allergies': allergies,
             'medicalConditions': medicalConditions,
             'medications': medications,
-          },
-        );
+            'createdAt': FieldValue.serverTimestamp(), // Timestamp of account creation
+          });
+          debugPrint("Firebase Signup: User details saved to Firestore for UID: ${user.uid}");
+
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Account created successfully! Please log in.')),
+            );
+            // Navigate to login screen.
+            // Arguments are still passed for now due to LoginScreen/MainScreen interim state.
+            // This will be refined when Firestore fetching is implemented on those screens.
+            Navigator.pushReplacementNamed(
+              context,
+              '/login',
+              arguments: {
+                'name': fullName, // Will be replaced by Firestore data on login
+                'phoneNumber': phoneNumber, // Will be replaced by Firestore data on login
+                'email': email, // Will be replaced by Firestore data on login
+                'address': address, // Will be replaced by Firestore data on login
+                'bloodType': bloodType, // Will be replaced by Firestore data on login
+                'allergies': allergies, // Will be replaced by Firestore data on login
+                'medicalConditions': medicalConditions, // Will be replaced by Firestore data on login
+                'medications': medications, // Will be replaced by Firestore data on login
+              },
+            );
+          }
+        }
+      } on FirebaseAuthException catch (e) {
+        String message;
+        if (e.code == 'weak-password') {
+          message = 'The password provided is too weak.';
+        } else if (e.code == 'email-already-in-use') {
+          message = 'An account already exists for that email.';
+        } else {
+          message = 'Signup failed: ${e.message}';
+        }
+        debugPrint("Firebase Signup error (Auth): $message (${e.code})");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+        }
+      } catch (e) { // Catching generic errors which might include Firestore errors
+        debugPrint("Signup error (Auth or Firestore): $e");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("An unexpected error occurred during signup.")));
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     }
   }
@@ -165,8 +217,15 @@ class _SignupScreenState extends State<SignupScreen> {
                   controller: _emailController,
                   hintText: 'Email Address',
                   keyboardType: TextInputType.emailAddress,
-                  validator: (value) =>
-                      value?.isEmpty == true ? 'Please enter your email' : null,
+                  validator: (value) {
+                    if (value?.isEmpty == true) {
+                      return 'Please enter your email';
+                    }
+                    if (!RegExp(r"^[a-zA-Z0-9.]+@[a-zA-Z0-9]+\.[a-zA-Z]+").hasMatch(value!)) {
+                      return 'Please enter a valid email address';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
 
@@ -174,8 +233,15 @@ class _SignupScreenState extends State<SignupScreen> {
                   controller: _passwordController,
                   hintText: 'Password',
                   obscureText: true,
-                  validator: (value) =>
-                      value?.isEmpty == true ? 'Please enter a password' : null,
+                  validator: (value) {
+                     if (value?.isEmpty == true) {
+                      return 'Please enter a password';
+                    }
+                    if (value!.length < 6) {
+                      return 'Password must be at least 6 characters';
+                    }
+                    return null;
+                  }
                 ),
                 const SizedBox(height: 16),
 
@@ -229,7 +295,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   controller: _allergiesController,
                   hintText: 'Allergies',
                   validator: (value) => value?.isEmpty == true
-                      ? 'Please enter any allergies'
+                      ? 'Please enter any allergies (or type None)'
                       : null,
                 ),
                 const SizedBox(height: 16),
@@ -238,7 +304,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   controller: _medicalConditionsController,
                   hintText: 'Medical Conditions',
                   validator: (value) => value?.isEmpty == true
-                      ? 'Please enter any medical conditions'
+                      ? 'Please enter any medical conditions (or type None)'
                       : null,
                 ),
                 const SizedBox(height: 16),
@@ -247,7 +313,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   controller: _medicationsController,
                   hintText: 'Medications',
                   validator: (value) => value?.isEmpty == true
-                      ? 'Please enter any medications'
+                      ? 'Please enter any medications (or type None)'
                       : null,
                 ),
 

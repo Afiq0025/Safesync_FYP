@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // <<<--- ADD THIS IMPORT
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -14,88 +16,103 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String? _errorMessage;
 
-  // State variables to store registered user data
-  String _registeredName = "";
-  String _registeredPhoneNumber = "";
-  String _registeredEmail = "";
-  String _registeredPassword = "";
-  String _registeredAddress = "";
-  String _registeredBloodType = "";
-  String _registeredAllergies = "";
-  String _registeredMedicalConditions = "";
-  String _registeredMedications = "";
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance; // Added Firestore instance
 
-  bool _didExtractArgs = false;
+  // The logic for _didExtractArgs and related variables for data from signup navigation
+  // is removed as user data will now be fetched from Firestore upon successful login.
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_didExtractArgs) {
-      final args =
-          ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
-      print('LoginScreen didChangeDependencies: Received args: $args');
-      if (args != null) {
-        _registeredName = args['name'] as String? ?? '';
-        _registeredPhoneNumber = args['phoneNumber'] as String? ?? '';
-        _registeredEmail = args['email'] as String? ?? '';
-        _registeredPassword = args['password'] as String? ?? ''; // Store password
-        _registeredAddress = args['address'] as String? ?? '';
-        _registeredBloodType = args['bloodType'] as String? ?? '';
-        _registeredAllergies = args['allergies'] as String? ?? '';
-        _registeredMedicalConditions =
-            args['medicalConditions'] as String? ?? '';
-        _registeredMedications = args['medications'] as String? ?? '';
-        
-        // For debugging: Print stored registered data
-        print('LoginScreen: Stored Registered Data - Email: $_registeredEmail, Password: $_registeredPassword, Name: $_registeredName, Phone: $_registeredPhoneNumber, Address: $_registeredAddress, BloodType: $_registeredBloodType, Allergies: $_registeredAllergies, Conditions: $_registeredMedicalConditions, Medications: $_registeredMedications');
-      }
-      _didExtractArgs = true;
-    }
+    // Previous argument extraction logic is removed.
+    // User data is now fetched from Firestore in _signIn().
   }
 
   Future<void> _signIn() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
-    await Future.delayed(const Duration(seconds: 1)); 
 
-    // For debugging: print values being compared
-    print('LoginScreen _signIn: Comparing input Email: ${_emailController.text} with Stored: $_registeredEmail');
-    print('LoginScreen _signIn: Comparing input Password: ${_passwordController.text} with Stored: $_registeredPassword');
+    try {
+      final String email = _emailController.text.trim();
+      final String password = _passwordController.text.trim();
 
-    // Compare with registered credentials
-    if (_emailController.text == _registeredEmail &&
-        _passwordController.text == _registeredPassword &&
-        _registeredEmail.isNotEmpty) { // Ensure an email was actually registered
-      setState(() {
-        _isLoading = false;
-      });
-      if (mounted) {
-        // For debugging: Print data being passed to /main
-        print('LoginScreen: Navigating to /main with Name: $_registeredName, Phone: $_registeredPhoneNumber, Email: $_registeredEmail, Address: $_registeredAddress, BloodType: $_registeredBloodType, Allergies: $_registeredAllergies, Conditions: $_registeredMedicalConditions, Medications: $_registeredMedications');
-        
-        Navigator.pushReplacementNamed(
-          context,
-          '/main',
-          arguments: {
-            'name': _registeredName,
-            'phoneNumber': _registeredPhoneNumber,
-            'email': _registeredEmail,
-            'address': _registeredAddress,
-            'bloodType': _registeredBloodType,
-            'allergies': _registeredAllergies,
-            'medicalConditions': _registeredMedicalConditions,
-            'medications': _registeredMedications,
-            // DO NOT pass the password to MainScreen/HomeScreen
-          },
-        );
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      User? user = userCredential.user;
+
+      if (user != null) {
+        debugPrint("Firebase Login successful: Auth UID: ${user.uid}, Email: ${user.email}");
+
+        // Fetch user details from Cloud Firestore
+        DocumentSnapshot userDoc = await _firestore.collection('users').doc(user.uid).get();
+
+        if (userDoc.exists) {
+          Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+          debugPrint("Firebase Login: User details fetched from Firestore: $userData");
+
+          if (mounted) {
+            Navigator.pushReplacementNamed(
+              context,
+              '/main',
+              arguments: {
+                'name': userData['fullName'] ?? (user.displayName ?? 'User'),
+                'phoneNumber': userData['phoneNumber'] ?? 'N/A',
+                'email': user.email, // Use email from Auth as primary
+                'address': userData['address'] ?? 'N/A',
+                'bloodType': userData['bloodType'] ?? 'N/A',
+                'allergies': userData['allergies'] ?? 'N/A',
+                'medicalConditions': userData['medicalConditions'] ?? 'N/A',
+                'medications': userData['medications'] ?? 'N/A',
+              },
+            );
+          }
+        } else {
+          debugPrint("Firebase Login: Error - User document not found in Firestore for UID: ${user.uid}");
+          if (mounted) {
+            setState(() {
+              _errorMessage = "User details not found. Please sign up or contact support.";
+            });
+            // Optionally sign out if data is missing, to force a clean state
+            // await _auth.signOut();
+          }
+        }
       }
-    } else {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Invalid email or password';
-      });
+    } on FirebaseAuthException catch (e) {
+      String message;
+      // Modern Firebase Auth often uses 'invalid-credential' for both user-not-found and wrong-password
+      if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential' || e.code == 'INVALID_LOGIN_CREDENTIALS') {
+        message = 'Invalid email or password.';
+      } else {
+        message = 'Login failed: ${e.message}';
+      }
+      debugPrint("Firebase Login error (Auth): $message (${e.code})");
+      if (mounted) {
+        setState(() {
+          _errorMessage = message;
+        });
+      }
+    } catch (e) {
+      debugPrint("Login error (Auth or Firestore): $e");
+      if (mounted) {
+        setState(() {
+          _errorMessage = "An unexpected error occurred during login.";
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -203,9 +220,15 @@ class _LoginScreenState extends State<LoginScreen> {
                                         borderSide: BorderSide.none,
                                       ),
                                     ),
-                                    validator: (value) => value == null || value.isEmpty
-                                        ? 'Enter email'
-                                        : null,
+                                    validator: (value) {
+                                      if (value == null || value.isEmpty) {
+                                        return 'Enter email';
+                                      }
+                                      if (!RegExp(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$").hasMatch(value)) {
+                                        return 'Please enter a valid email address';
+                                      }
+                                      return null;
+                                    }
                                   ),
                                   SizedBox(height: isSmallScreen ? 12.0 : 16.0),
                                   TextFormField(
@@ -232,11 +255,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                   if (_errorMessage != null)
                                     Padding(
                                       padding: const EdgeInsets.only(bottom: 12),
-                                      child: Text(
-                                        _errorMessage!,
-                                        style: TextStyle(
-                                          color: Colors.red,
-                                          fontSize: fontSize,
+                                      child: Center( // Center the error message
+                                        child: Text(
+                                          _errorMessage!,
+                                          style: TextStyle(
+                                            color: Colors.red,
+                                            fontSize: fontSize,
+                                          ),
+                                          textAlign: TextAlign.center,
                                         ),
                                       ),
                                     ),
@@ -244,13 +270,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     width: double.infinity,
                                     height: buttonHeight,
                                     child: ElevatedButton(
-                                      onPressed: _isLoading
-                                          ? null
-                                          : () {
-                                              if (_formKey.currentState!.validate()) {
-                                                _signIn();
-                                              }
-                                            },
+                                      onPressed: _isLoading ? null : _signIn,
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: const Color(0xFFED213A),
                                         shape: RoundedRectangleBorder(
@@ -274,27 +294,31 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                   SizedBox(height: isSmallScreen ? 12.0 : 16.0),
-                                  Wrap(
-                                    alignment: WrapAlignment.center,
-                                    children: [
-                                      Text(
-                                        "Don't have an account? ",
-                                        style: TextStyle(fontSize: fontSize),
-                                      ),
-                                      GestureDetector(
-                                        onTap: () {
-                                          Navigator.pushNamed(context, '/signup');
-                                        },
-                                        child: Text(
-                                          'Sign up',
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            decoration: TextDecoration.underline,
-                                            fontSize: fontSize,
+                                  Center( // Center the "Don't have an account?" text
+                                    child: Wrap(
+                                      alignment: WrapAlignment.center,
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      children: [
+                                        Text(
+                                          "Don\'t have an account? ",
+                                          style: TextStyle(fontSize: fontSize),
+                                        ),
+                                        GestureDetector(
+                                          onTap: () {
+                                            Navigator.pushNamed(context, '/signup');
+                                          },
+                                          child: Text(
+                                            'Sign up',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              decoration: TextDecoration.underline,
+                                              color: const Color(0xFFED213A),
+                                              fontSize: fontSize,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),

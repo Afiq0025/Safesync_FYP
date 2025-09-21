@@ -3,6 +3,7 @@ plugins {
     // Add the Google services Gradle plugin
     id("com.google.gms.google-services")
 
+    //id("com.google.gms.google-services") version "4.4.3" apply false
     id("kotlin-android")
     // Flutter Gradle Plugin must be applied last
     id("dev.flutter.flutter-gradle-plugin")
@@ -13,6 +14,7 @@ plugins {
 dependencies {
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
+    implementation("com.google.firebase:firebase-analytics")
 
     // WearOS
     implementation("com.google.android.gms:play-services-wearable:18.1.0")

@@ -20,6 +20,10 @@ dependencies:
   # UI Components
   cupertino_icons: ^1.0.2
 
+  #authentication
+  firebase_auth: ^6.0.2
+  cloud_firestore: ^6.0.1
+
   # State Management
   provider: ^6.0.5
   bloc: ^8.1.2
@@ -59,14 +63,15 @@ dependencies:
 
   # Audio (simplified to avoid conflicts)
   # flutter_sound: ^9.2.13
+  speech_to_text: ^7.3.0
   audioplayers: ^5.2.1
 
   # Health & Fitness (commented out to avoid compatibility issues)
   # health: ^13.1.1
 
   # Push Notifications
-  firebase_core: ^2.17.0
-  firebase_messaging: ^14.7.0
+  firebase_core: ^4.1.0
+  firebase_messaging: 16.0.1
   flutter_local_notifications: ^17.2.1
 
   # Emergency Services
