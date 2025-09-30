@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:safesync/models/discussion_post.dart'; // Changed import
+import 'package:safesync/models/discussion_post.dart';
 import 'submit_report.dart';
 import 'package:safesync/screens/community/report.dart'; // Import the Report model
-import 'package:intl/intl.dart'; // Import for date formatting
+import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Added for Firestore
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({Key? key}) : super(key: key);
@@ -13,44 +14,17 @@ class ReportScreen extends StatefulWidget {
 
 class _ReportScreenState extends State<ReportScreen> {
   int _currentTab = 0; // 0: Report, 1: Alert, 2: Discussion
-  List<Report> _reports = [];
-  List<DiscussionPost> _discussionPosts = []; // Store discussion posts
-  final TextEditingController _discussionController = TextEditingController(); // Controller for the TextField
+  // List<Report> _reports = []; // Removed: Reports will be handled by StreamBuilder
+  List<DiscussionPost> _discussionPosts = [];
+  final TextEditingController _discussionController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _reports = [
-      Report(
-        title: 'Suspicious Vehicle Spotted',
-        dateTime: 'May 6, 2025 • 9:15 PM',
-        location: 'Taman Kajang Utama',
-        description: 'A black van was parked for hours with the engine running. No clear activity.',
-        status: 'Unverified',
-        tags: ['Suspicious', 'Night'],
-        author: 'Anonymous',
-      ),
-      Report(
-        title: 'Break-in Attempt',
-        dateTime: 'May 5, 2025 • 2:30 AM',
-        location: 'Jalan Bukit',
-        description: 'Heard someone trying to force open the back door. Dog barked and scared them away.',
-        status: 'Verified',
-        tags: ['Break-in', 'Night'],
-        author: 'Sarah L.',
-      ),
-      Report(
-        title: 'Gathering of Suspicious Individuals',
-        dateTime: 'May 4, 2025 • 7:45 PM',
-        location: 'Near Shell Station',
-        description: 'Group of 5-6 men hanging around for 2+ hours, making residents uncomfortable.',
-        status: 'Under Investigation',
-        tags: ['Suspicious', 'Group'],
-        author: 'Mike T.',
-      ),
-    ];
+    // _reports initialization removed.
 
     _discussionPosts = [
+      // ... (your existing discussion posts initialization) ...
       DiscussionPost(
         content: 'Need more street lights on Jalan Bukit. There have been multiple incidents on this street. We need better lighting for safety.',
         author: 'Sarah L.',
@@ -84,6 +58,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ... (rest of your build method is unchanged)
     return Scaffold(
       backgroundColor: const Color(0xFFFF6B6B),
       body: SafeArea(
@@ -129,6 +104,7 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Widget _buildTab(String title, int index) {
+    // ... (this method is unchanged)
     return Expanded(
       child: GestureDetector(
         onTap: () {
@@ -159,6 +135,7 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Widget _buildContent() {
+    // ... (this method is unchanged)
     switch (_currentTab) {
       case 0:
         return _buildReportTab();
@@ -174,12 +151,39 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget _buildReportTab() {
     return Stack(
       children: [
-        ListView.builder(
-          padding: const EdgeInsets.fromLTRB(15, 15, 15, 80),
-          itemCount: _reports.length,
-          itemBuilder: (context, index) {
-            final report = _reports[index];
-            return _buildReportCard(report);
+        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          // Listen to the 'reports' collection, order by timestamp
+          stream: FirebaseFirestore.instance
+              .collection('reports')
+              .orderBy('timestamp', descending: true) // Order by server timestamp
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              print('StreamBuilder error: ${snapshot.error}'); // For debugging
+              return Center(child: Text('Something went wrong! ${snapshot.error}'));
+            }
+
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return const Center(child: Text('No reports yet. Be the first to submit!'));
+            }
+
+            // Map Firestore documents to Report objects
+            final reports = snapshot.data!.docs
+                .map((doc) => Report.fromFirestore(doc))
+                .toList();
+
+            return ListView.builder(
+              padding: const EdgeInsets.fromLTRB(15, 15, 15, 80), // Keep padding for FAB
+              itemCount: reports.length,
+              itemBuilder: (context, index) {
+                final report = reports[index];
+                return _buildReportCard(report);
+              },
+            );
           },
         ),
         Positioned(
@@ -190,16 +194,27 @@ class _ReportScreenState extends State<ReportScreen> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () async {
-                final newReport = await Navigator.push(
+                // Navigate to SubmitReportScreen
+                final newReportFromSubmitScreen = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const SubmitReportScreen(),
                   ),
                 );
-                if (newReport != null && newReport is Report) {
-                  setState(() {
-                    _reports.insert(0, newReport);
-                  });
+
+                // This local update is for optimistic UI update.
+                // The StreamBuilder will eventually pick up the change from Firestore.
+                if (newReportFromSubmitScreen != null && newReportFromSubmitScreen is Report) {
+                  // No need to manually add to a local list if StreamBuilder is handling it.
+                  // However, if SubmitReportScreen returns the Report object *after* it's
+                  // successfully saved to Firestore, then Firestore will trigger the stream.
+                  // If it returns *before* saving, then this optimistic update is useful
+                  // until the stream catches up.
+                  // For now, we'll assume SubmitReportScreen ensures data is in Firestore
+                  // or the UI can wait for the stream.
+                  // setState(() {
+                  //   // _reports.insert(0, newReportFromSubmitScreen); // Not needed with StreamBuilder
+                  // });
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -227,6 +242,7 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
+  // ... (Keep _buildAlertTab, _buildDiscussionTab, _buildReportCard, _buildAlertCard, _buildDiscussionPostCard, _getStatusColor, and dispose as they are)
   Widget _buildAlertTab() {
     return ListView(
       padding: const EdgeInsets.all(15),
@@ -407,7 +423,7 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-   Widget _buildAlertCard(String title, String location, String description, String urgency, List<String> tags) {
+  Widget _buildAlertCard(String title, String location, String description, String urgency, List<String> tags) {
     return Card(
       margin: const EdgeInsets.only(bottom: 15),
       shape: RoundedRectangleBorder(
@@ -473,7 +489,7 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _buildDiscussionPostCard(DiscussionPost post) { // Renamed and updated to use DiscussionPost model
+  Widget _buildDiscussionPostCard(DiscussionPost post) { 
     return Card(
       margin: const EdgeInsets.only(bottom: 15),
       shape: RoundedRectangleBorder(
@@ -485,14 +501,14 @@ class _ReportScreenState extends State<ReportScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              post.content, // Use post.content
+              post.content, 
               style: const TextStyle(
                 fontSize: 15,
               ),
             ),
             const SizedBox(height: 10),
             Text(
-              '${post.author} • ${post.dateTime}', // Use post.author and post.dateTime
+              '${post.author} • ${post.dateTime}', 
               style: TextStyle(
                 color: Colors.grey[600],
                 fontSize: 13,
@@ -522,7 +538,7 @@ class _ReportScreenState extends State<ReportScreen> {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
-                 const SizedBox(width: 4),
+                const SizedBox(width: 4),
                 Text('${post.comments}'),
               ],
             ),
@@ -547,7 +563,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   void dispose() {
-    _discussionController.dispose(); // Dispose the controller
+    _discussionController.dispose();
     super.dispose();
   }
 }

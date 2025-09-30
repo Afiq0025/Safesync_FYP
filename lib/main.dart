@@ -555,6 +555,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void dispose() {
     _fallDetectionService.dispose();
     _shakeDetectionService.dispose();
+    // It's good practice to also stop location sharing if active when HomeScreen disposes
+    // if this is the primary screen managing that state.
+    // However, ensure this doesn't conflict with background location needs if any.
+    if (_locationService.isCurrentlySharing()) {
+      debugPrint("HomeScreen disposing: Stopping location sharing.");
+      _locationService.stopSharingLocation();
+    }
     super.dispose();
   }
 
@@ -573,18 +580,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       if (buttonKey == 'emergency') {
         bool isEmergencyActive = buttonPressed['emergency']!;
+        // Link location sharing state to emergency mode state
         buttonPressed['location'] = isEmergencyActive;
 
         if (isEmergencyActive) {
-          debugPrint("HomeScreen: Emergency Mode ARMED. Location Sharing also ACTIVATED. Shake to trigger full emergency sequence.");
+          debugPrint("HomeScreen: Emergency Mode ARMED. Location Sharing also ACTIVATED (state set). LocationService hash: ${_locationService.hashCode}");
+          // Ensure location sharing actually starts.
+          _locationService.startSharingLocation();
+          debugPrint("HomeScreen: Call to _locationService.startSharingLocation() for emergency arm completed (method is async).");
+
         } else {
-          debugPrint("HomeScreen: Emergency Mode DISARMED. Location Sharing also DEACTIVATED.");
+          debugPrint("HomeScreen: Emergency Mode DISARMED. Location Sharing also DEACTIVATED (state set). Calling _locationService.stopSharingLocation(). LocationService hash: ${_locationService.hashCode}");
+          _locationService.stopSharingLocation();
+          debugPrint("HomeScreen: Call to _locationService.stopSharingLocation() for emergency disarm completed (method is async).");
         }
       } else if (buttonKey == 'location') {
+        // This is for the independent location button
         if (buttonPressed['location']!) {
-          debugPrint("HomeScreen: Location Sharing ACTIVATED independently.");
+          debugPrint("HomeScreen: Location Sharing ACTIVATED independently. Calling _locationService.startSharingLocation(). LocationService hash: ${_locationService.hashCode}");
+          _locationService.startSharingLocation();
+          debugPrint("HomeScreen: Call to _locationService.startSharingLocation() for independent activation completed (method is async).");
         } else {
-          debugPrint("HomeScreen: Location Sharing DEACTIVATED independently.");
+          // This is the "Location Sharing DEACTIVATED independently" path
+          debugPrint("HomeScreen: Location Sharing DEACTIVATED independently. Preparing to call _locationService.stopSharingLocation(). LocationService hash: ${_locationService.hashCode}");
+          _locationService.stopSharingLocation();
+          debugPrint("HomeScreen: Call to _locationService.stopSharingLocation() for independent deactivation completed (method is async).");
         }
       }
     });

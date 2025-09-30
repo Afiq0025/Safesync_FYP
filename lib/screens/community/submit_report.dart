@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:safesync/screens/community/report.dart'; // Added import
-
-// Report class definition removed from here
+import 'package:safesync/screens/community/report.dart'; // Existing import
+import 'package:cloud_firestore/cloud_firestore.dart'; // Added for Firebase
+import 'package:firebase_auth/firebase_auth.dart'; // Added for Firebase Auth
+import 'package:geolocator/geolocator.dart'; // Added for location services
+import 'package:geocoding/geocoding.dart'; // Added for converting coordinates to address
 
 class SubmitReportScreen extends StatefulWidget {
   const SubmitReportScreen({Key? key}) : super(key: key);
@@ -13,19 +15,35 @@ class SubmitReportScreen extends StatefulWidget {
 class _SubmitReportScreenState extends State<SubmitReportScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
-  // TODO: Add a TextEditingController for location if you want to make it an input field
-  // final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _categoryController = TextEditingController();
   
-  String selectedDate = 'Jun 10, 2024';
-  String selectedTime = '9:41 AM';
+  String selectedDate = 'Jun 10, 2024'; 
+  String selectedTime = '9:41 AM'; 
   
   List<String> selectedTags = [];
   
   final List<String> availableTags = [
     'Theft', 'Suspicion', 'Burglary', 'Break-in',
     'Vandalism', 'Assault', 'Noise', 'Traffic',
-    'Emergency', 'Missing Person', 'Fire', 'Night'
+    'Emergency', 'Missing Person', 'Fire', 'Night', 'Safety Hazard', 'Suggestion'
   ];
+
+  bool _isSubmitting = false; // To prevent multiple submissions
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    selectedDate = '${_getMonthName(now.month)} ${now.day}, ${now.year}';
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          selectedTime = TimeOfDay.fromDateTime(now).format(context);
+        });
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,7 +61,6 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
 
             return Column(
               children: [
-                // Header with back button
                 Padding(
                   padding: padding,
                   child: Row(
@@ -59,8 +76,6 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                     ],
                   ),
                 ),
-                
-                // Main content
                 Expanded(
                   child: SingleChildScrollView(
                     child: Padding(
@@ -78,7 +93,6 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Title
                             Text(
                               'Submit Report',
                               style: TextStyle(
@@ -87,8 +101,6 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                               ),
                             ),
                             SizedBox(height: spacing),
-                            
-                            // Date and Time Row
                             Row(
                               children: [
                                 Expanded(
@@ -140,10 +152,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                                 ),
                               ],
                             ),
-                            
                             SizedBox(height: spacing),
-                            
-                            // Title field
                             Text(
                               'Title',
                               style: TextStyle(
@@ -163,10 +172,27 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                               ),
                               style: TextStyle(fontSize: fontSize),
                             ),
-                            
                             SizedBox(height: spacing),
-                            
-                            // Description field
+                            Text(
+                              'Category',
+                              style: TextStyle(
+                                fontSize: fontSize,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            SizedBox(height: spacing * 0.5),
+                            TextField(
+                              controller: _categoryController,
+                              decoration: InputDecoration(
+                                hintText: 'E.g., Safety Concern, Suspicious Activity',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(isSmallScreen ? 8 : 12),
+                                ),
+                              ),
+                              style: TextStyle(fontSize: fontSize),
+                            ),
+                            SizedBox(height: spacing),
                             Text(
                               'Description',
                               style: TextStyle(
@@ -187,10 +213,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                               ),
                               style: TextStyle(fontSize: fontSize),
                             ),
-                            
                             SizedBox(height: spacing),
-                            
-                            // Tags
                             Text(
                               'Tags',
                               style: TextStyle(
@@ -236,16 +259,11 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                                 );
                               }).toList(),
                             ),
-                            
-                            SizedBox(height: spacing),
-                            
-                            // Submit button
+                            SizedBox(height: spacing * 2),
                             Container(
                               width: double.infinity,
                               child: ElevatedButton(
-                                onPressed: () {
-                                  _submitReport();
-                                },
+                                onPressed: _isSubmitting ? null : _submitReport, // Disable button while submitting
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.red,
                                   foregroundColor: Colors.white,
@@ -254,15 +272,22 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
                                     borderRadius: BorderRadius.circular(25),
                                   ),
                                 ),
-                                child: const Text(
-                                  'Submit report',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                child: _isSubmitting
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                                      )
+                                    : const Text(
+                                        'Submit Report',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                               ),
                             ),
+                            SizedBox(height: spacing),
                           ],
                         ),
                       ),
@@ -296,7 +321,7 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
       context: context,
       initialTime: TimeOfDay.now(),
     );
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() {
         selectedTime = picked.format(context);
       });
@@ -311,42 +336,176 @@ class _SubmitReportScreenState extends State<SubmitReportScreen> {
     return months[month];
   }
 
-  void _submitReport() {
-    if (_titleController.text.isEmpty || _descriptionController.text.isEmpty) {
+ Future<String> _getCurrentLocationString() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    // Test if location services are enabled.
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location services are disabled. Please enable them.')),
+        );
+      }
+      return 'Location services disabled';
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permissions are denied.')),
+          );
+        }
+        return 'Location permissions denied';
+      }
+    }
+    
+    if (permission == LocationPermission.deniedForever) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location permissions are permanently denied, we cannot request permissions.')),
+        );
+      }
+      return 'Location permissions permanently denied';
+    } 
+
+    try {
+      Position position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium);
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+          position.latitude, position.longitude);
+
+      if (placemarks.isNotEmpty) {
+        Placemark place = placemarks[0];
+        
+        // Collect potential address parts (which can be String?)
+        List<String?> potentialParts = [
+          place.street,
+          place.locality,
+          // place.subLocality, // You can add other parts if needed
+          place.postalCode,
+          place.country
+        ];
+
+        // Filter out nulls and empty strings, then join.
+        List<String> validParts = potentialParts
+            .where((part) => part != null && part.isNotEmpty)
+            .cast<String>() 
+            .toList();
+        
+        String address = validParts.join(', ');
+        
+        return address.isEmpty ? "Near current location (details unavailable)" : address;
+      } else {
+        return "Current location (address unavailable)";
+      }
+    } catch (e) {
+      print("Error getting location: $e");
+      return "Could not fetch location";
+    }
+  }
+
+  Future<void> _submitReport() async {
+    if (_titleController.text.isEmpty || 
+        _descriptionController.text.isEmpty ||
+        _categoryController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please fill in all required fields'),
+          content: Text('Please fill in all required fields: Title, Category, and Description.'),
           backgroundColor: Colors.red,
         ),
       );
       return;
     }
 
-    final newReport = Report(
-      title: _titleController.text,
-      description: _descriptionController.text,
-      dateTime: '$selectedDate • $selectedTime', // Using a bullet for separator
-      tags: List<String>.from(selectedTags), // Create a new list from selectedTags
-      location: 'Unknown Location', // Added default location
-      status: 'Unverified', author: '', // Added default status
-      // author: 'Me', // Defaulted in class
-    );
+    setState(() {
+      _isSubmitting = true;
+    });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Report submitted successfully!'),
-        backgroundColor: Colors.green,
-      ),
-    );
-    
-    Navigator.pop(context, newReport); // Pass the new report back
+    final User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You must be logged in to submit a report.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() {
+        _isSubmitting = false;
+      });
+      return;
+    }
+
+    final String userName = currentUser.displayName ?? currentUser.email ?? 'Anonymous User';
+    final String userId = currentUser.uid;
+    final String combinedDateTime = '$selectedDate • $selectedTime';
+    final String locationString = await _getCurrentLocationString(); // Fetch location
+
+    try {
+      Map<String, dynamic> reportData = {
+        'userId': userId,
+        'fullName': userName,
+        'reportTitle': _titleController.text,
+        'reportDescription': _descriptionController.text,
+        'category': _categoryController.text,
+        'tags': List<String>.from(selectedTags),
+        'locationString': locationString, // Use fetched location
+        'submittedDateTimeString': combinedDateTime,
+        'timestamp': FieldValue.serverTimestamp(),
+        'status': 'unverified',
+        'adminNotes': '',
+      };
+
+      await FirebaseFirestore.instance.collection('reports').add(reportData);
+
+      final newReportForUI = Report(
+        title: _titleController.text,
+        description: _descriptionController.text,
+        dateTime: combinedDateTime,
+        tags: List<String>.from(selectedTags),
+        location: locationString, // Use fetched location
+        status: 'unverified',
+        author: userName,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Report submitted successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, newReportForUI);
+      }
+
+    } catch (e) {
+      print('Error submitting report: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit report: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    // _locationController.dispose(); // If you add a location field
+    _categoryController.dispose();
     super.dispose();
   }
 }

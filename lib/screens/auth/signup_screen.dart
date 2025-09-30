@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // <<<--- ADD THIS IMPORT
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({Key? key}) : super(key: key);
@@ -26,7 +26,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   bool _isLoading = false;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance; // Added Firestore instance
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   Future<void> _createAccount() async {
     if (_formKey.currentState!.validate()) {
@@ -55,41 +55,56 @@ class _SignupScreenState extends State<SignupScreen> {
         if (user != null) {
           debugPrint("Firebase Signup successful: Auth UID: ${user.uid}");
 
-          // Save additional user details to Cloud Firestore
+          try {
+            await user.updateProfile(displayName: fullName);
+            await user.reload(); 
+            user = _auth.currentUser; 
+            debugPrint("Firebase Signup: User displayName updated in Auth to: ${user?.displayName}");
+          } catch (e) {
+            debugPrint("Firebase Signup: Error updating displayName in Auth: $e");
+          }
+
+          if (user == null) {
+            debugPrint("Firebase Signup: User became null after reload. Cannot save to Firestore.");
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Error creating profile. Please try again.')),
+              );
+            }
+            setState(() => _isLoading = false);
+            return; 
+          }
+
           await _firestore.collection('users').doc(user.uid).set({
-            'uid': user.uid, // Storing UID for convenience, though doc ID is UID
-            'fullName': fullName,
+            'uid': user.uid, 
+            'fullName': fullName, // Changed to fullName
             'phoneNumber': phoneNumber,
-            'email': email, // Storing email for convenience
+            'email': email, 
             'address': address,
             'bloodType': bloodType,
             'allergies': allergies,
             'medicalConditions': medicalConditions,
             'medications': medications,
-            'createdAt': FieldValue.serverTimestamp(), // Timestamp of account creation
+            'createdAt': FieldValue.serverTimestamp(), 
           });
           debugPrint("Firebase Signup: User details saved to Firestore for UID: ${user.uid}");
-
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Account created successfully! Please log in.')),
             );
-            // Navigate to login screen.
-            // Arguments are still passed for now due to LoginScreen/MainScreen interim state.
-            // This will be refined when Firestore fetching is implemented on those screens.
             Navigator.pushReplacementNamed(
               context,
               '/login',
               arguments: {
-                'name': fullName, // Will be replaced by Firestore data on login
-                'phoneNumber': phoneNumber, // Will be replaced by Firestore data on login
-                'email': email, // Will be replaced by Firestore data on login
-                'address': address, // Will be replaced by Firestore data on login
-                'bloodType': bloodType, // Will be replaced by Firestore data on login
-                'allergies': allergies, // Will be replaced by Firestore data on login
-                'medicalConditions': medicalConditions, // Will be replaced by Firestore data on login
-                'medications': medications, // Will be replaced by Firestore data on login
+                'name': fullName, 
+                'phoneNumber': phoneNumber, 
+                'email': email, 
+                'address': address,
+                'bloodType': bloodType,
+                'allergies': allergies,
+                'medicalConditions': medicalConditions,
+                'medications': medications,
               },
             );
           }
@@ -107,7 +122,7 @@ class _SignupScreenState extends State<SignupScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
         }
-      } catch (e) { // Catching generic errors which might include Firestore errors
+      } catch (e) { 
         debugPrint("Signup error (Auth or Firestore): $e");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("An unexpected error occurred during signup.")));

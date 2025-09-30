@@ -19,7 +19,6 @@ class LocationService {
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       debugPrint("LocationService: Location services are disabled. Please enable the services");
-      // Optionally, prompt user to enable location services
       return false;
     }
 
@@ -34,63 +33,80 @@ class LocationService {
 
     if (permission == LocationPermission.deniedForever) {
       debugPrint("LocationService: Location permissions are permanently denied, we cannot request permissions.");
-      // Optionally, direct user to app settings
       return false;
     }
     return true;
   }
 
   Future<void> startSharingLocation() async {
+    // Log instance hash and initial state
+    debugPrint("LocationService: startSharingLocation() called. Instance hash: ${this.hashCode}. Current _isSharing status: $_isSharing");
+
     if (_isSharing) {
-      debugPrint("LocationService: Already sharing location.");
+      debugPrint("LocationService (hash: ${this.hashCode}): startSharingLocation attempted, but _isSharing was already true.");
       return;
     }
 
     final hasPermission = await _handleLocationPermission();
     if (!hasPermission) {
-      debugPrint("LocationService: No permission to access location.");
+      debugPrint("LocationService (hash: ${this.hashCode}): No permission to access location for startSharingLocation.");
       return;
     }
 
     if (currentUser == null) {
-      debugPrint("LocationService: User not logged in. Cannot share location.");
+      debugPrint("LocationService (hash: ${this.hashCode}): User not logged in. Cannot start sharing location.");
       return;
     }
 
-    _isSharing = true;
-    debugPrint("LocationService: Starting location sharing for user ${currentUser!.uid}");
+    _isSharing = true; // Set flag first
+    debugPrint("LocationService (hash: ${this.hashCode}): Set _isSharing to true for user ${currentUser!.uid}");
 
-    // Get initial position
     try {
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      _updateUserLocationInFirestore(position);
+      if (_isSharing) {
+         debugPrint("LocationService (hash: ${this.hashCode}): Got initial position for ${currentUser!.uid}");
+        _updateUserLocationInFirestore(position);
+      } else {
+        debugPrint("LocationService (hash: ${this.hashCode}): _isSharing became false before initial position update could be sent.");
+      }
     } catch (e) {
-      debugPrint("LocationService: Error getting initial position: $e");
+      debugPrint("LocationService (hash: ${this.hashCode}): Error getting initial position: $e");
     }
 
-    // Start listening to position updates
     final LocationSettings locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 10, // Notify only when location changes by 10 meters
+      distanceFilter: 10,
     );
 
+    await _positionStreamSubscription?.cancel(); // Cancel any existing before starting new
     _positionStreamSubscription = Geolocator.getPositionStream(locationSettings: locationSettings).listen(
       (Position? position) {
         if (position != null && _isSharing) {
-          debugPrint("LocationService: Location update - Lat: ${position.latitude}, Lng: ${position.longitude}");
+          debugPrint("LocationService (hash: ${this.hashCode}): Stream sent new position for ${currentUser?.uid}. _isSharing: $_isSharing");
           _updateUserLocationInFirestore(position);
+        } else if (position != null && !_isSharing) {
+          debugPrint("LocationService (hash: ${this.hashCode}): Stream sent new position, but _isSharing is false. Update skipped.");
         }
       },
       onError: (error) {
-        debugPrint("LocationService: Error in location stream: $error");
-        stopSharingLocation(); // Stop sharing on stream error
+        debugPrint("LocationService (hash: ${this.hashCode}): Error in location stream: $error");
       }
     );
-    debugPrint("LocationService: User's location is now being actively shared via stream.");
+    debugPrint("LocationService (hash: ${this.hashCode}): Location stream started. _isSharing: $_isSharing. Stream is null: ${_positionStreamSubscription == null}");
   }
 
   Future<void> _updateUserLocationInFirestore(Position position) async {
-    if (currentUser == null) return;
+    // Added instance hash for consistency in logging, though not strictly necessary here if stop/start are main concerns
+    debugPrint("LocationService (hash: ${this.hashCode}): _updateUserLocationInFirestore called. _isSharing is: $_isSharing, User: ${currentUser?.uid}");
+
+    if (currentUser == null) {
+      debugPrint("LocationService (hash: ${this.hashCode}): Update to Firestore blocked because currentUser is null.");
+      return;
+    }
+    if (!_isSharing) {
+      debugPrint("LocationService (hash: ${this.hashCode}): Update to Firestore blocked because _isSharing is false.");
+      return;
+    }
 
     String userId = currentUser!.uid;
     GeoPoint userLocation = GeoPoint(position.latitude, position.longitude);
@@ -100,43 +116,51 @@ class LocationService {
         'location': userLocation,
         'lastUpdated': Timestamp.now(),
         'userId': userId,
-        'userEmail': currentUser!.email, // Optional: for easier identification
-        'isSharing': true,
-      }, SetOptions(merge: true)); // Use merge to avoid overwriting other fields if any
-      debugPrint("LocationService: Updated location for $userId to Firestore.");
+        'userEmail': currentUser!.email,
+        'isSharing': true, 
+      }, SetOptions(merge: true));
+      debugPrint("LocationService (hash: ${this.hashCode}): Updated location for $userId to Firestore. (isSharing was true during this update)");
     } catch (e) {
-      debugPrint("LocationService: Error updating location to Firestore: $e");
+      debugPrint("LocationService (hash: ${this.hashCode}): Error updating location to Firestore: $e");
     }
   }
 
   Future<void> stopSharingLocation() async {
+    // Log instance hash and initial state
+    debugPrint("LocationService: stopSharingLocation() called. Instance hash: ${this.hashCode}. Current _isSharing status: $_isSharing");
+
     if (!_isSharing) {
-      debugPrint("LocationService: Location sharing is not active.");
+      debugPrint("LocationService (hash: ${this.hashCode}): stopSharingLocation attempted, but _isSharing was already false.");
       return;
     }
 
-    await _positionStreamSubscription?.cancel();
-    _positionStreamSubscription = null;
-    _isSharing = false;
-    debugPrint("LocationService: Stopped location sharing for user ${currentUser?.uid}.");
+    // Set _isSharing to false as early as possible after the initial check.
+    _isSharing = false; 
+    debugPrint("LocationService (hash: ${this.hashCode}): _isSharing IMMEDIATELY set to false.");
 
+    // Now, attempt to cancel the stream.
+    try {
+      await _positionStreamSubscription?.cancel();
+      _positionStreamSubscription = null; 
+      debugPrint("LocationService (hash: ${this.hashCode}): Stream cancelled and set to null. _isSharing is $_isSharing (should be false).");
+    } catch (e) {
+      debugPrint("LocationService (hash: ${this.hashCode}): Error during _positionStreamSubscription.cancel(): $e");
+    }
+
+    // Update Firestore
     if (currentUser != null) {
       String userId = currentUser!.uid;
       try {
-        // Option 1: Mark as not sharing
         await _firestore.collection('user_live_locations').doc(userId).update({
-          'isSharing': false,
-          'lastUpdated': Timestamp.now(), // Good to know when they stopped
+          'isSharing': false, 
+          'lastUpdated': Timestamp.now(),
         });
-        debugPrint("LocationService: Marked user $userId as not sharing in Firestore.");
-
-        // Option 2: Delete the document (if you don't need to keep a record of them ever sharing)
-        // await _firestore.collection('user_live_locations').doc(userId).delete();
-        // debugPrint("LocationService: Deleted location document for $userId from Firestore.");
-
+        debugPrint("LocationService (hash: ${this.hashCode}): Marked user $userId as not sharing (isSharing: false) in Firestore.");
       } catch (e) {
-        debugPrint("LocationService: Error updating/deleting location status in Firestore: $e");
+        debugPrint("LocationService (hash: ${this.hashCode}): Error updating 'isSharing' to false in Firestore: $e");
       }
+    } else {
+      debugPrint("LocationService (hash: ${this.hashCode}): currentUser is null in stopSharingLocation, cannot update Firestore 'isSharing' field.");
     }
   }
 
