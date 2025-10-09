@@ -44,6 +44,7 @@ dependencies:
   # Maps
   google_maps_flutter: ^2.5.0
 
+
   # Local Storage
   shared_preferences: ^2.2.2
   sqflite: ^2.3.0

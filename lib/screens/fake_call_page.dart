@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 
 class FakeCallPage extends StatefulWidget {
-  const FakeCallPage({super.key});
+  // A field to hold the dynamic station name.
+  final String stationName;
+
+  // The constructor now accepts a station name, with a default value for fallback.
+  const FakeCallPage({
+    super.key,
+    this.stationName = 'Nearby Police Station', // Default value
+  });
 
   @override
   State<FakeCallPage> createState() => _FakeCallPageState();
@@ -22,9 +29,11 @@ class _FakeCallPageState extends State<FakeCallPage> {
               size: 80.0,
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Calling 999...',
-              style: TextStyle(
+            // The Text widget now uses the stationName passed to the widget.
+            Text(
+              'Calling ${widget.stationName}...',
+              textAlign: TextAlign.center, // Good for potentially long names
+              style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
@@ -32,7 +41,7 @@ class _FakeCallPageState extends State<FakeCallPage> {
             ),
             const SizedBox(height: 10),
             const Text(
-              'Emergency Call',
+              'Connecting...',
               style: TextStyle(
                 fontSize: 18,
                 color: Colors.white70,
@@ -51,8 +60,6 @@ class _FakeCallPageState extends State<FakeCallPage> {
                 if (Navigator.of(context).canPop()) {
                   Navigator.of(context).pop();
                 }
-                // Potentially add a callback here if you need to notify
-                // the previous screen that the call ended.
               },
               child: const Text(
                 'End Call',
