@@ -503,7 +503,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     _emergencyService = EmergencyService(
       context: context,
-      locationService: _locationService, // Pass the location service instance
+      locationService: _locationService,
       isLocationSharingActive: () => buttonPressed['location'] ?? false,
       onStartLocationSharing: _locationService.startSharingLocation,
       onInitiateAutoCall: _autoCallService.initiateFakeAutoCallToPolice,
@@ -630,15 +630,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF36060),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          debugPrint("Dummy Emergency Button Pressed: Triggering emergency service.");
-          _emergencyService.handleEmergencyTrigger();
-        },
-        backgroundColor: Colors.amber,
-        tooltip: 'Trigger Emergency (Test)',
-        child: const Icon(Icons.bug_report, color: Colors.black),
-      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20.0),

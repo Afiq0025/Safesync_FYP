@@ -43,7 +43,6 @@ class LocationService {
     return true;
   }
 
-  /// This is the NEW, REAL method to find the nearest police station.
   Future<String> findNearestPoliceStation() async {
     debugPrint("LocationService: Attempting to find nearest police station.");
     final hasPermission = await _handleLocationPermission();
@@ -56,7 +55,6 @@ class LocationService {
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       debugPrint("LocationService: Got user position: Lat: ${position.latitude}, Lng: ${position.longitude}");
 
-      // --- REAL API CALL ---
       final url = Uri.parse(
           'https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${position.latitude},${position.longitude}&radius=5000&type=police&key=$_googleApiKey');
       
@@ -66,7 +64,6 @@ class LocationService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['status'] == 'OK' && data['results'].isNotEmpty) {
-          // Get the name of the first result
           final String stationName = data['results'][0]['name'];
           debugPrint("LocationService: Found station: $stationName");
           return stationName;
