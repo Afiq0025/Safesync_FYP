@@ -13,7 +13,7 @@ class LocationService {
   bool _isSharing = false;
 
   // --- IMPORTANT: PASTE YOUR API KEY HERE ---
-  final String _googleApiKey = 'YOUR_GOOGLE_PLACES_API_KEY';
+  final String _googleApiKey = 'AIzaSyD42TAMeyzdBe-fqKBc2UDPClKyE6qbKq4';
 
   User? get currentUser => _firebaseAuth.currentUser;
 

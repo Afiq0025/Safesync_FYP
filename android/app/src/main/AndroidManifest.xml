@@ -63,7 +63,7 @@
         <!-- Google Maps API Key (replace value with your actual key) -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="YOUR_GOOGLE_PLACES_API_KEY"/>
+            android:value="AIzaSyD42TAMeyzdBe-fqKBc2UDPClKyE6qbKq4"/>
 
         <!-- Flutter Embedding -->
         <meta-data
