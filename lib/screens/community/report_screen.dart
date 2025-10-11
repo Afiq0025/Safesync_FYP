@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:safesync/models/discussion_post.dart';
-import 'submit_report.dart';
-import 'package:safesync/screens/community/report.dart'; // Import the Report model
+import 'package:safesync/screens/community/submit_report.dart';
+import 'package:safesync/screens/community/report.dart';
+import 'package:safesync/screens/community/discussion_detail_screen.dart';
 import 'package:intl/intl.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Added for Firestore
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({Key? key}) : super(key: key);
@@ -14,51 +16,10 @@ class ReportScreen extends StatefulWidget {
 
 class _ReportScreenState extends State<ReportScreen> {
   int _currentTab = 0; // 0: Report, 1: Alert, 2: Discussion
-  // List<Report> _reports = []; // Removed: Reports will be handled by StreamBuilder
-  List<DiscussionPost> _discussionPosts = [];
   final TextEditingController _discussionController = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-    // _reports initialization removed.
-
-    _discussionPosts = [
-      // ... (your existing discussion posts initialization) ...
-      DiscussionPost(
-        content: 'Need more street lights on Jalan Bukit. There have been multiple incidents on this street. We need better lighting for safety.',
-        author: 'Sarah L.',
-        dateTime: 'May 6, 2025 • 10:00 AM',
-        likes: 12,
-        comments: 5,
-      ),
-      DiscussionPost(
-        content: 'Managed to get the plate number of that black van: ABC 1234. Should we report to police?',
-        author: 'Mike T.',
-        dateTime: 'May 6, 2025 • 8:30 AM',
-        likes: 8,
-        comments: 3,
-      ),
-      DiscussionPost(
-        content: 'Anyone else experiencing frequent power outages in the Taman Sri Muda area? Its been happening almost daily this week.',
-        author: 'John D.',
-        dateTime: 'May 7, 2025 • 11:15 AM',
-        likes: 5,
-        comments: 2,
-      ),
-      DiscussionPost(
-        content: 'Lets organize a community clean-up drive for next weekend. Our park needs some attention.',
-        author: 'Lisa P.',
-        dateTime: 'May 7, 2025 • 2:00 PM',
-        likes: 15,
-        comments: 7,
-      ),
-    ];
-  }
-
-  @override
   Widget build(BuildContext context) {
-    // ... (rest of your build method is unchanged)
     return Scaffold(
       backgroundColor: const Color(0xFFFF6B6B),
       body: SafeArea(
@@ -104,7 +65,6 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Widget _buildTab(String title, int index) {
-    // ... (this method is unchanged)
     return Expanded(
       child: GestureDetector(
         onTap: () {
@@ -135,7 +95,6 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Widget _buildContent() {
-    // ... (this method is unchanged)
     switch (_currentTab) {
       case 0:
         return _buildReportTab();
@@ -152,14 +111,12 @@ class _ReportScreenState extends State<ReportScreen> {
     return Stack(
       children: [
         StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          // Listen to the 'reports' collection, order by timestamp
           stream: FirebaseFirestore.instance
               .collection('reports')
-              .orderBy('timestamp', descending: true) // Order by server timestamp
+              .orderBy('timestamp', descending: true)
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.hasError) {
-              print('StreamBuilder error: ${snapshot.error}'); // For debugging
               return Center(child: Text('Something went wrong! ${snapshot.error}'));
             }
 
@@ -171,13 +128,12 @@ class _ReportScreenState extends State<ReportScreen> {
               return const Center(child: Text('No reports yet. Be the first to submit!'));
             }
 
-            // Map Firestore documents to Report objects
             final reports = snapshot.data!.docs
                 .map((doc) => Report.fromFirestore(doc))
                 .toList();
 
             return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(15, 15, 15, 80), // Keep padding for FAB
+              padding: const EdgeInsets.fromLTRB(15, 15, 15, 80),
               itemCount: reports.length,
               itemBuilder: (context, index) {
                 final report = reports[index];
@@ -194,28 +150,12 @@ class _ReportScreenState extends State<ReportScreen> {
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () async {
-                // Navigate to SubmitReportScreen
-                final newReportFromSubmitScreen = await Navigator.push(
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const SubmitReportScreen(),
                   ),
                 );
-
-                // This local update is for optimistic UI update.
-                // The StreamBuilder will eventually pick up the change from Firestore.
-                if (newReportFromSubmitScreen != null && newReportFromSubmitScreen is Report) {
-                  // No need to manually add to a local list if StreamBuilder is handling it.
-                  // However, if SubmitReportScreen returns the Report object *after* it's
-                  // successfully saved to Firestore, then Firestore will trigger the stream.
-                  // If it returns *before* saving, then this optimistic update is useful
-                  // until the stream catches up.
-                  // For now, we'll assume SubmitReportScreen ensures data is in Firestore
-                  // or the UI can wait for the stream.
-                  // setState(() {
-                  //   // _reports.insert(0, newReportFromSubmitScreen); // Not needed with StreamBuilder
-                  // });
-                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
@@ -242,7 +182,6 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  // ... (Keep _buildAlertTab, _buildDiscussionTab, _buildReportCard, _buildAlertCard, _buildDiscussionPostCard, _getStatusColor, and dispose as they are)
   Widget _buildAlertTab() {
     return ListView(
       padding: const EdgeInsets.all(15),
@@ -266,87 +205,141 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Widget _buildDiscussionTab() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+
     return Column(
       children: [
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(15),
-            itemCount: _discussionPosts.length,
-            itemBuilder: (context, index) {
-              final post = _discussionPosts[index];
-              return _buildDiscussionPostCard(post);
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('discussions')
+                .orderBy('timestamp', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(child: Text('Something went wrong: ${snapshot.error}'));
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return const Center(child: Text('No discussions yet. Start one!'));
+              }
+
+              final posts = snapshot.data!.docs
+                  .map((doc) => DiscussionPost.fromFirestore(doc))
+                  .toList();
+
+              return ListView.builder(
+                padding: const EdgeInsets.all(15),
+                itemCount: posts.length,
+                itemBuilder: (context, index) {
+                  final post = posts[index];
+                  return _buildDiscussionPostCard(post, currentUser);
+                },
+              );
             },
           ),
         ),
-        Container(
-          padding: const EdgeInsets.all(15),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(15),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.2),
-                blurRadius: 5,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Write your thought',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _discussionController, // Use the controller
-                maxLines: 3,
-                decoration: InputDecoration(
-                  hintText: 'Share your thoughts with the community...',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  contentPadding: const EdgeInsets.all(12),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  ElevatedButton(
-                    onPressed: () {
-                      if (_discussionController.text.isNotEmpty) {
-                        final newPost = DiscussionPost(
-                          content: _discussionController.text,
-                          author: 'Current User', // Replace with actual user later
-                          dateTime: DateFormat('MMM d, yyyy • hh:mm a').format(DateTime.now()),
-                        );
-                        setState(() {
-                          _discussionPosts.insert(0, newPost);
-                          _discussionController.clear(); // Clear the TextField
-                        });
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                    ),
-                    child: const Text('Post'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+        _buildDiscussionInput(currentUser),
       ],
     );
+  }
+
+  Widget _buildDiscussionInput(User? currentUser) {
+    return Container(
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.2),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Write your thought',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _discussionController,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: 'Share your thoughts with the community...',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding: const EdgeInsets.all(12),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              ElevatedButton(
+                onPressed: () => _postDiscussion(currentUser),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                child: const Text('Post'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _postDiscussion(User? currentUser) async {
+    if (_discussionController.text.isEmpty) return;
+
+    if (currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You must be logged in to post.')),
+      );
+      return;
+    }
+
+    await FirebaseFirestore.instance.collection('discussions').add({
+      'content': _discussionController.text,
+      'author': currentUser.displayName ?? currentUser.email ?? 'Anonymous',
+      'timestamp': FieldValue.serverTimestamp(),
+      'likes': [],
+      'commentCount': 0,
+    });
+
+    _discussionController.clear();
+  }
+
+  Future<void> _toggleLike(DiscussionPost post, User? currentUser) async {
+    if (currentUser == null) return;
+
+    final postRef = FirebaseFirestore.instance.collection('discussions').doc(post.id);
+    final currentLikes = List<String>.from(post.likes);
+
+    if (currentLikes.contains(currentUser.uid)) {
+      currentLikes.remove(currentUser.uid);
+    } else {
+      currentLikes.add(currentUser.uid);
+    }
+
+    await postRef.update({'likes': currentLikes});
   }
 
   Widget _buildReportCard(Report report) {
@@ -489,7 +482,9 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _buildDiscussionPostCard(DiscussionPost post) { 
+  Widget _buildDiscussionPostCard(DiscussionPost post, User? currentUser) {
+    final bool isLiked = currentUser != null && post.likes.contains(currentUser.uid);
+
     return Card(
       margin: const EdgeInsets.only(bottom: 15),
       shape: RoundedRectangleBorder(
@@ -508,7 +503,7 @@ class _ReportScreenState extends State<ReportScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              '${post.author} • ${post.dateTime}', 
+              '${post.author} • ${_formatTimestamp(post.timestamp)}', 
               style: TextStyle(
                 color: Colors.grey[600],
                 fontSize: 13,
@@ -518,34 +513,45 @@ class _ReportScreenState extends State<ReportScreen> {
             Row(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.thumb_up_outlined),
+                  icon: Icon(
+                    isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                    color: isLiked ? Colors.red : Colors.grey,
+                  ),
+                  onPressed: () => _toggleLike(post, currentUser),
+                  iconSize: 20,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 4),
+                Text('${post.likes.length}'),
+                const SizedBox(width: 20),
+                IconButton(
+                  icon: const Icon(Icons.comment_outlined),
                   onPressed: () {
-                    setState(() {
-                      post.likes++;
-                    });
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => DiscussionDetailScreen(post: post),
+                      ),
+                    );
                   },
                   iconSize: 20,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
                 const SizedBox(width: 4),
-                Text('${post.likes}'),
-                const SizedBox(width: 20),
-                IconButton(
-                  icon: const Icon(Icons.comment_outlined),
-                  onPressed: () {},
-                  iconSize: 20,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-                const SizedBox(width: 4),
-                Text('${post.comments}'),
+                Text('${post.commentCount}'),
               ],
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _formatTimestamp(Timestamp timestamp) {
+    final DateTime dateTime = timestamp.toDate();
+    return DateFormat('MMM d, yyyy • hh:mm a').format(dateTime);
   }
 
   Color _getStatusColor(String status) {

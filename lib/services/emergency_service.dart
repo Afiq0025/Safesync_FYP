@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Added for HapticFeedback
+import 'package:safesync/screens/fake_call_no_response_page.dart';
 import '../screens/fake_call_page.dart'; // Import for FakeCallPage
 import 'location_service.dart'; // Import LocationService
 
@@ -11,6 +12,7 @@ class EmergencyService {
   final VoidCallback onStartLocationSharing;
   final VoidCallback onInitiateAutoCall;
   final ValueGetter<bool> isEmergencyButtonActive;
+  final ValueGetter<bool> isAutoCallActive; // New parameter
 
   EmergencyService({
     required this.context,
@@ -19,22 +21,22 @@ class EmergencyService {
     required this.onStartLocationSharing,
     required this.onInitiateAutoCall,
     required this.isEmergencyButtonActive,
+    required this.isAutoCallActive, // Require it in the constructor
   });
 
   Future<void> handleEmergencyTrigger() async {
     if (!isEmergencyButtonActive()) {
-      debugPrint("EmergencyService: Triggered, but Emergency Mode feature is not active. No dialog shown.");
+      debugPrint(
+          "EmergencyService: Triggered, but Emergency Mode feature is not active. No dialog shown.");
       return;
     }
 
     if (ModalRoute.of(context)?.isCurrent != true) {
-      debugPrint("EmergencyService: Another route is current, potentially a dialog. Aborting.");
+      debugPrint(
+          "EmergencyService: Another route is current, potentially a dialog. Aborting.");
       return;
     }
 
-    // Show a loading indicator while we find the nearest station
-    // This can be a simple dialog or just happen in the background.
-    // For now, we will do it in the background before showing the confirmation.
     final String stationName = await locationService.findNearestPoliceStation();
     debugPrint("EmergencyService: Found nearest station: '$stationName'");
 
@@ -74,18 +76,27 @@ class EmergencyService {
       ).timeout(const Duration(seconds: 10));
     } on TimeoutException {
       debugPrint("EmergencyService: Confirmation timed out.");
-      if (Navigator.of(context).mounted &&
-          Navigator.of(context, rootNavigator: true).canPop()) {
-        Navigator.of(context, rootNavigator: true).pop();
-      }
+      if (isAutoCallActive()) {
+        debugPrint("EmergencyService: Auto Call is ON. Initiating fake call with operator voice.");
+        if (Navigator.of(context).mounted &&
+            Navigator.of(context, rootNavigator: true).canPop()) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
 
-      if (Navigator.of(context).mounted) {
-        Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (context) => FakeCallPage(stationName: stationName)));
+        if (Navigator.of(context).mounted) {
+          Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => FakeCallNoResponsePage(stationName: stationName)));
+        }
+        onInitiateAutoCall();
+      } else {
+        debugPrint("EmergencyService: Auto Call is OFF. Doing nothing.");
+        if (Navigator.of(context).mounted &&
+            Navigator.of(context, rootNavigator: true).canPop()) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
       }
-      onInitiateAutoCall();
       return;
     } catch (e) {
       debugPrint("EmergencyService: Error showing dialog: $e");
@@ -93,7 +104,7 @@ class EmergencyService {
     }
 
     if (confirmed == true) {
-      debugPrint("EmergencyService: Emergency sequence ACTIVATED!");
+      debugPrint("EmergencyService: Emergency sequence ACTIVATED by user!");
       if (Navigator.of(context).mounted) {
         Navigator.push(
             context,

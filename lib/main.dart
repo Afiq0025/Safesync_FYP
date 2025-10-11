@@ -512,6 +512,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       onStartLocationSharing: _locationService.startSharingLocation,
       onInitiateAutoCall: _autoCallService.initiateFakeAutoCallToPolice,
       isEmergencyButtonActive: () => buttonPressed['emergency'] ?? false,
+      isAutoCallActive: () => buttonPressed['call'] ?? false, // Add this line
     );
     _fallDetectionService = FallDetectionService(
       onFallDetected: _updateLastFallDetected,
@@ -620,6 +621,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           debugPrint("HomeScreen: Location Sharing DEACTIVATED independently.");
           _locationService.stopSharingLocation();
         }
+      } else if (buttonKey == 'call') {
+        // The logic for auto-call is handled in the EmergencyService, 
+        // so we don't need to do anything special here other than toggle the state.
       }
     });
   }
@@ -700,7 +704,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildActivityIndicator(Icons.emergency_recording_rounded, "Automatic\nRecording", onTap: () => Navigator.pushNamed(context, '/recording-settings')),
-                  _buildActivityIndicator(Icons.watch_rounded, "Pair Smart\nDevices", onTap: () => Navigator.pushNamed(context, '/pair-smart-devices')),
                 ],
               ),
               const SizedBox(height: 15),

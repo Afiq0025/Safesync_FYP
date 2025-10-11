@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 
 class FakeCallPage extends StatefulWidget {
-  // A field to hold the dynamic station name.
   final String stationName;
 
-  // The constructor now accepts a station name, with a default value for fallback.
   const FakeCallPage({
     super.key,
-    this.stationName = 'Nearby Police Station', // Default value
+    this.stationName = 'Nearby Police Station',
   });
 
   @override
@@ -29,10 +27,9 @@ class _FakeCallPageState extends State<FakeCallPage> {
               size: 80.0,
             ),
             const SizedBox(height: 20),
-            // The Text widget now uses the stationName passed to the widget.
             Text(
               'Calling ${widget.stationName}...',
-              textAlign: TextAlign.center, // Good for potentially long names
+              textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
