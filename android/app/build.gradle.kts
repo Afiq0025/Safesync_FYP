@@ -11,6 +11,18 @@ plugins {
 
 }
 
+import java.util.Properties
+
+// Load API key from .env file
+val envFile = rootProject.file(".env")
+val apiKey = if (envFile.exists()) {
+    val properties = Properties()
+    envFile.inputStream().use { properties.load(it) }
+    properties.getProperty("GOOGLE_MAPS_API_KEY")
+} else {
+    null
+}
+
 dependencies {
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
@@ -41,6 +53,7 @@ android {
         // Optional: Define this if you're using `${SafesyncApp}` in AndroidManifest.xml
         // If not using a custom Application class, you can delete this line
         manifestPlaceholders["SafesyncApp"] = "com.fyp.safesync.safesync.Application"
+        manifestPlaceholders["googleMapsApiKey"] = apiKey ?: ""
     }
 
     buildTypes {

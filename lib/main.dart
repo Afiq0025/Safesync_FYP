@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart'; // Added for DateFormat
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // Firebase Imports
 import 'package:firebase_core/firebase_core.dart';
@@ -39,6 +40,9 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 
 Future<void> main() async { 
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load the .env file
+  await dotenv.load(fileName: ".env");
 
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,

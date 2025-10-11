@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:convert'; // Required for jsonDecode
 import 'package:flutter/foundation.dart';
@@ -5,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http; // Import the http package
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class LocationService {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
@@ -12,8 +14,8 @@ class LocationService {
   StreamSubscription<Position>? _positionStreamSubscription;
   bool _isSharing = false;
 
-  // --- IMPORTANT: PASTE YOUR API KEY HERE ---
-  final String _googleApiKey = 'AIzaSyD42TAMeyzdBe-fqKBc2UDPClKyE6qbKq4';
+  // --- IMPORTANT: API key is now loaded from .env ---
+  final String _googleApiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? 'fallback_api_key';
 
   User? get currentUser => _firebaseAuth.currentUser;
 
@@ -46,7 +48,7 @@ class LocationService {
   Future<String> findNearestPoliceStation() async {
     debugPrint("LocationService: Attempting to find nearest police station.");
     final hasPermission = await _handleLocationPermission();
-    if (!hasPermission || _googleApiKey == 'YOUR_GOOGLE_PLACES_API_KEY') {
+    if (!hasPermission || _googleApiKey == 'fallback_api_key') {
       debugPrint("LocationService: No location permission or API key is missing.");
       return "Nearby Police Station"; // Fallback name
     }
