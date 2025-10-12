@@ -5,7 +5,9 @@
 <key>NSSpeechRecognitionUsageDescription</key>
 <string>This app uses speech recognition to detect keywords for safety alerts.</string>
 <key>NSMicrophoneUsageDescription</key>
-<string>This app needs microphone access to listen for voice commands and keywords.</string>
+<string>This app needs microphone access to record audio during an emergency.</string>
+<key>NSCameraUsageDescription</key>
+<string>This app needs camera access to record video during an emergency.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -53,12 +55,6 @@
     <string>This app needs location access to provide safety features and emergency services.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
     <string>This app needs location access to provide safety features and emergency services.</string>
-    <key>NSCameraUsageDescription</key>
-    <string>This app needs camera access to capture evidence for incident reports.</string>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>This app needs microphone access for emergency voice detection.</string>
-    <key>NSSpeechRecognitionUsageDescription</key>
-    <string>This app needs speech recognition access to understand voice commands.</string>
     <key>NSContactsUsageDescription</key>
     <string>This app needs contact access to manage emergency contacts.</string>
     <key>NSHealthShareUsageDescription</key>

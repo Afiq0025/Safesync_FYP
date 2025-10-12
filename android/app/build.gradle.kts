@@ -14,7 +14,7 @@ plugins {
 import java.util.Properties
 
 // Load API key from .env file
-val envFile = rootProject.file(".env")
+val envFile = rootProject.file("../.env")
 val apiKey = if (envFile.exists()) {
     val properties = Properties()
     envFile.inputStream().use { properties.load(it) }

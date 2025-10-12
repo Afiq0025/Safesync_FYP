@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class RecordingSettingsScreen extends StatefulWidget {
   const RecordingSettingsScreen({Key? key}) : super(key: key);
@@ -8,8 +9,32 @@ class RecordingSettingsScreen extends StatefulWidget {
 }
 
 class _RecordingSettingsScreenState extends State<RecordingSettingsScreen> {
-  String selectedFps = 'Select Fps';
-  String selectedResolution = 'Select Resolutions';
+  bool _isAutoRecordingEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _isAutoRecordingEnabled = prefs.getBool('auto_recording') ?? false;
+      });
+    }
+  }
+
+  Future<void> _saveAutoRecordingSetting(bool isEnabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('auto_recording', isEnabled);
+    if (mounted) {
+      setState(() {
+        _isAutoRecordingEnabled = isEnabled;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +61,6 @@ class _RecordingSettingsScreenState extends State<RecordingSettingsScreen> {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            // Main settings card
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -48,42 +72,27 @@ class _RecordingSettingsScreenState extends State<RecordingSettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // FPS Section
-                    const Text(
-                      'Fps',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildDropdownButton(
-                      selectedFps,
-                      ['30 FPS', '60 FPS', '120 FPS'],
-                      (value) => setState(() => selectedFps = value!),
-                    ),
-                    
                     const SizedBox(height: 32),
-                    
-                    // Graphic Section
-                    const Text(
-                      'Graphic',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
+                    // Auto Recording Section
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Auto-Record in Emergency',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        Switch(
+                          value: _isAutoRecordingEnabled,
+                          onChanged: _saveAutoRecordingSetting,
+                          activeColor: const Color(0xFFDD0000),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    _buildDropdownButton(
-                      selectedResolution,
-                      ['720p HD', '1080p Full HD', '4K Ultra HD'],
-                      (value) => setState(() => selectedResolution = value!),
-                    ),
-                    
-                    const SizedBox(height: 32),
-                    
+                    const SizedBox(height: 24),
                     // Storage Location Section
                     const Text(
                       'Storage Location',
@@ -102,11 +111,10 @@ class _RecordingSettingsScreenState extends State<RecordingSettingsScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Text(
-                        '/Android/data/com.safesync.app/files/recordings/',
+                        'Videos are saved to the device gallery in the Movies/Safesync folder.',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.black54,
-                          fontFamily: 'monospace',
                         ),
                       ),
                     ),
@@ -114,63 +122,9 @@ class _RecordingSettingsScreenState extends State<RecordingSettingsScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 20),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildDropdownButton(String currentValue, List<String> options, ValueChanged<String?> onChanged) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.grey[200],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: options.contains(currentValue) ? currentValue : null,
-          hint: Text(
-            currentValue,
-            style: const TextStyle(
-              color: Colors.black54,
-              fontSize: 16,
-            ),
-          ),
-          icon: const Icon(Icons.keyboard_arrow_down, color: Colors.black54),
-          isExpanded: true,
-          items: options.map((String value) {
-            return DropdownMenuItem<String>(
-              value: value,
-              child: Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.black87,
-                  fontSize: 16,
-                ),
-              ),
-            );
-          }).toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavIcon(IconData icon, String label, bool isSelected) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFFE57373) : Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Icon(
-        icon,
-        color: isSelected ? Colors.white : Colors.grey[600],
-        size: 24,
       ),
     );
   }

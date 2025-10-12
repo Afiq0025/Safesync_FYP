@@ -17,38 +17,41 @@ class _MapScreenState extends State<MapScreen> {
   final Completer<GoogleMapController> _mapControllerCompleter = Completer();
   
   Set<Marker> _markers = {};
+  Set<Marker> _liveMarkers = {}; // Markers for other users
   Set<Circle> _circles = {};
-  LatLng? _currentPosition; // To store current device's position
+  LatLng? _currentPosition;
 
-  // Firestore stream subscription
   StreamSubscription? _liveLocationsSubscription;
+  StreamSubscription<Position>? _positionStreamSubscription; // For user's own location
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
-
 
   @override
   void initState() {
     super.initState();
-    _determinePosition(); // Get current location on init
-    _listenToLiveLocations(); // Start listening to other users' locations
+    _subscribeToLocationUpdates();
+    _listenToLiveLocations();
+    _createDummyZones();
   }
 
   @override
   void dispose() {
-    _liveLocationsSubscription?.cancel(); // Important to cancel subscription
+    _liveLocationsSubscription?.cancel();
+    _positionStreamSubscription?.cancel();
     super.dispose();
   }
 
-  Future<void> _determinePosition() async {
-    // ... your existing _determinePosition() logic ...
-    // (This remains largely the same, focusing on THIS device's location)
-    // --- START OF EXISTING _determinePosition ---
+  Future<void> _subscribeToLocationUpdates() async {
     bool serviceEnabled;
     LocationPermission permission;
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      print('Location services are disabled.');
-      _setDefaultLocationAndMarkers();
+      debugPrint('Location services are disabled.');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Location services are disabled. Please enable them.'),
+        ));
+      }
       return;
     }
 
@@ -56,48 +59,56 @@ class _MapScreenState extends State<MapScreen> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        print('Location permissions are denied');
-        _setDefaultLocationAndMarkers();
+        debugPrint('Location permissions are denied');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Location permission is required to show your position.'),
+          ));
+        }
         return;
       }
     }
     
     if (permission == LocationPermission.deniedForever) {
-      print('Location permissions are permanently denied, we cannot request permissions.');
-      _setDefaultLocationAndMarkers();
+      debugPrint('Location permissions are permanently denied, we cannot request permissions.');
+      if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Location permissions are permanently denied. Please enable them in your phone settings.'),
+          ));
+        }
       return;
     } 
 
+    // Get the initial position and move the camera for a fast first view
     try {
-      Position position = await Geolocator.getCurrentPosition();
+      Position initialPosition = await Geolocator.getCurrentPosition();
       if (mounted) {
         setState(() {
-          _currentPosition = LatLng(position.latitude, position.longitude);
-          // _setMarkersAndCircles(); // We'll let _listenToLiveLocations handle markers primarily
-                                 // or merge its logic carefully
-          _updateMarkers(); // New method to consolidate marker updates
+          _currentPosition = LatLng(initialPosition.latitude, initialPosition.longitude);
+          _updateCurrentUserMarker();
           _goToCurrentLocation(initial: true); 
         });
       }
     } catch (e) {
-      print('Error getting location: $e');
-      _setDefaultLocationAndMarkers();
+      debugPrint('Error getting initial location: $e');
     }
-    // --- END OF EXISTING _determinePosition ---
-  }
 
-  void _setDefaultLocationAndMarkers() {
-    if (mounted) {
-      setState(() {
-        _currentPosition = const LatLng(2.9331, 101.7980); // Default location
-        // _setMarkersAndCircles();
-        _updateMarkers(); // New method
-         _goToCurrentLocation(initial: true);
-      });
-    }
+    // Subscribe to continuous location updates
+    _positionStreamSubscription = Geolocator.getPositionStream().listen(
+      (Position position) {
+        if (mounted) {
+          setState(() {
+            _currentPosition = LatLng(position.latitude, position.longitude);
+            _updateCurrentUserMarker();
+          });
+        }
+      },
+      onError: (e) {
+        debugPrint('Error in location stream: $e');
+      }
+    );
   }
   
-  // New method to listen to Firestore for other users' locations
   void _listenToLiveLocations() {
     User? currentUser = _firebaseAuth.currentUser;
     if (currentUser == null) {
@@ -111,113 +122,170 @@ class _MapScreenState extends State<MapScreen> {
         .snapshots()
         .listen((QuerySnapshot snapshot) {
       if (mounted) {
-        Set<Marker> newMarkers = {}; // Temporary set for new markers from Firestore
-
-        // Add this device's own location marker first (if position is known)
-        if (_currentPosition != null) {
-          newMarkers.add(
-            Marker(
-              markerId: const MarkerId('current_location'),
-              position: _currentPosition!,
-              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen), // Current user marker
-              infoWindow: const InfoWindow(
-                title: 'Your Location',
-              ),
-            ),
-          );
-        }
-
-        for (var doc in snapshot.docs) {
-          Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-          GeoPoint geoPoint = data['location'] as GeoPoint;
-          String userId = data['userId'] as String;
-          String userEmail = data['userEmail'] as String? ?? 'N/A';
-
-          // Don't add a marker from Firestore if it's the current user's own live location
-          // (already handled by 'current_location' marker from GPS, or you can choose to only use Firestore)
-          // For simplicity now, we rely on GPS for 'current_location' and skip Firestore for self.
-          if (userId == currentUser.uid) {
-            continue; 
-          }
-
-          newMarkers.add(
-            Marker(
-              markerId: MarkerId(userId),
-              position: LatLng(geoPoint.latitude, geoPoint.longitude),
-              infoWindow: InfoWindow(
-                title: userEmail.split('@').first, // Or a display name if available
-                snippet: 'Lat: ${geoPoint.latitude.toStringAsFixed(4)}, Lng: ${geoPoint.longitude.toStringAsFixed(4)}',
-              ),
-              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure), // Other users' marker
-            ),
-          );
-        }
-        setState(() {
-          _markers = newMarkers; // Replace all markers
-          _updateCircles(); // Also update circles if they depend on _currentPosition
-        });
+        _updateLiveMarkers(snapshot.docs);
       }
     }, onError: (error) {
       debugPrint("MapScreen: Error listening to live locations: $error");
     });
   }
 
-  // Renamed and slightly modified to only handle circles, markers are now primary handled by _listenToLiveLocations
-  void _updateCircles() {
-    if (_currentPosition == null) return;
-    if (!mounted) return;
+  void _updateLiveMarkers(List<QueryDocumentSnapshot> docs) {
+    Set<Marker> newLiveMarkers = {};
+    User? currentUser = _firebaseAuth.currentUser;
 
-    Set<Circle> newCircles = {};
-    newCircles.addAll([
-      Circle(
-        circleId: const CircleId('safe_circle'),
-        center: _currentPosition!,
-        radius: 300,
-        fillColor: Colors.green.withOpacity(0.3),
-        strokeColor: Colors.green,
+    for (var doc in docs) {
+      try {
+        final data = doc.data() as Map<String, dynamic>;
+        final String userId = data['userId'];
+        
+        // Don't draw a marker for the current user from the live collection,
+        // as we are drawing it based on the real-time device location stream.
+        if (userId == currentUser?.uid) continue;
+
+        final GeoPoint location = data['location'];
+        final String name = data['name'] ?? 'Anonymous User';
+
+        newLiveMarkers.add(
+          Marker(
+            markerId: MarkerId(userId),
+            position: LatLng(location.latitude, location.longitude),
+            infoWindow: InfoWindow(title: name),
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          ),
+        );
+      } catch (e) {
+        debugPrint("Error processing live location document: $e");
+      }
+    }
+
+    if(mounted) {
+      setState(() {
+        _liveMarkers = newLiveMarkers;
+      });
+    }
+  }
+
+  void _createDummyZones() {
+    final List<Map<String, dynamic>> zones = [
+      // Bangi Area Mix
+      {'id': 'bangi_danger_1', 'lat': 2.9200, 'lng': 101.7550, 'radius': 500.0, 'type': 'danger'},
+      {'id': 'bangi_safe_1', 'lat': 2.9100, 'lng': 101.7450, 'radius': 300.0, 'type': 'safe'},
+      {'id': 'bangi_danger_2', 'lat': 2.9250, 'lng': 101.7600, 'radius': 400.0, 'type': 'danger'},
+      {'id': 'bangi_safe_2', 'lat': 2.9050, 'lng': 101.7500, 'radius': 600.0, 'type': 'safe'},
+
+      // Kajang Area Mix
+      {'id': 'kajang_safe_1', 'lat': 2.9900, 'lng': 101.7900, 'radius': 500.0, 'type': 'safe'},
+      {'id': 'kajang_danger_1', 'lat': 3.0000, 'lng': 101.7850, 'radius': 350.0, 'type': 'danger'},
+      {'id': 'kajang_safe_2', 'lat': 2.9850, 'lng': 101.7800, 'radius': 450.0, 'type': 'safe'},
+      {'id': 'kajang_danger_2', 'lat': 2.9980, 'lng': 101.7950, 'radius': 550.0, 'type': 'danger'},
+    ];
+
+    Set<Circle> dummyCircles = {};
+
+    for (var zone in zones) {
+      final bool isSafe = zone['type'] == 'safe';
+      dummyCircles.add(Circle(
+        circleId: CircleId(zone['id'] as String),
+        center: LatLng(zone['lat'] as double, zone['lng'] as double),
+        radius: zone['radius'] as double,
+        fillColor: isSafe ? Colors.green.withOpacity(0.3) : Colors.red.withOpacity(0.3),
+        strokeColor: isSafe ? Colors.green : Colors.red,
         strokeWidth: 2,
-      ),
-      Circle(
-        circleId: const CircleId('danger_circle'),
-        center: const LatLng(2.9363, 101.7980), // This could be another dynamic point or currentPosition
-        radius: 150,
-        fillColor: Colors.red.withOpacity(0.3),
-        strokeColor: Colors.red,
-        strokeWidth: 2,
-      ),
-    ]);
+      ));
+    }
+
     setState(() {
-        _circles = newCircles;
+      _circles.addAll(dummyCircles);
     });
   }
 
-  // New consolidated method to update all markers and circles
-  void _updateMarkers() {
-      // This method can be called after _determinePosition or when _currentPosition changes
-      // It mainly ensures the 'current_location' marker and circles are up-to-date.
-      // Other users' markers are handled by _listenToLiveLocations.
-      if (!mounted) return;
-      if (_currentPosition == null) return;
+  void _updateCurrentUserMarker() {
+    if (!mounted || _currentPosition == null) return;
 
-      Set<Marker> updatedMarkerSet = Set.from(_markers); // Start with existing markers from Firestore stream
-
-      // Remove old 'current_location' marker if it exists, then add the new one
-      updatedMarkerSet.removeWhere((m) => m.markerId == const MarkerId('current_location'));
-      updatedMarkerSet.add(
-          Marker(
-            markerId: const MarkerId('current_location'),
-            position: _currentPosition!,
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen), // Current user
-            infoWindow: const InfoWindow(title: 'Your Location'),
-          ),
+    setState(() {
+       _markers.removeWhere((m) => m.markerId.value == 'current_location');
+      _markers.add(
+        Marker(
+          markerId: const MarkerId('current_location'),
+          position: _currentPosition!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          infoWindow: const InfoWindow(title: 'Your Location'),
+        ),
       );
-      
-      setState(() {
-          _markers = updatedMarkerSet;
-          _updateCircles();
-      });
+    });
   }
 
+
+  Future<void> _goToCurrentLocation({bool initial = false}) async {
+    if (_currentPosition == null) {
+      // If position is somehow null, try to refetch it.
+      await _subscribeToLocationUpdates();
+      return;
+    }
+    final GoogleMapController controller = await _mapControllerCompleter.future;
+    controller.animateCamera(CameraUpdate.newCameraPosition(
+      CameraPosition(
+        target: _currentPosition!,
+        zoom: 12.0,
+      ),
+    ));
+  }
+
+  Widget _buildLegend() {
+    return Container(
+      padding: const EdgeInsets.all(8.0),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 4,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Legend', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const SizedBox(height: 5),
+          Row(
+            children: [
+              Icon(Icons.location_on, color: Colors.green.shade700, size: 20),
+              const SizedBox(width: 8),
+              const Text('Your Location', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(Icons.location_on, color: Colors.blue.shade700, size: 20),
+              const SizedBox(width: 8),
+              const Text('Other Users', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(Icons.circle, color: Colors.green.withOpacity(0.7), size: 20),
+              const SizedBox(width: 8),
+              const Text('Safe Zone', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+           const SizedBox(height: 4),
+          Row(
+            children: [
+              Icon(Icons.circle, color: Colors.red.withOpacity(0.7), size: 20),
+              const SizedBox(width: 8),
+              const Text('Danger Zone', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -246,35 +314,25 @@ class _MapScreenState extends State<MapScreen> {
                 builder: (context, constraints) {
                   final isSmallScreen = constraints.maxWidth < 350;
                   final padding = EdgeInsets.all(isSmallScreen ? 12.0 : 20.0);
-                  final controlSize = isSmallScreen ? 36.0 : 40.0;
-                  final controlSpacing = isSmallScreen ? 6.0 : 8.0;
-                  final legendPadding = EdgeInsets.all(isSmallScreen ? 8.0 : 12.0);
-                  final legendFontSize = isSmallScreen ? 11.0 : 12.0;
-                  final legendSpacing = isSmallScreen ? 6.0 : 8.0;
-
-                  if (_currentPosition == null && _markers.isEmpty) { // Show loading if no position AND no markers from Firestore yet
-                    return const Center(child: CircularProgressIndicator(color: Colors.white));
-                  }
 
                   return Padding(
                     padding: padding,
                     child: Container(
-                      width: double.infinity,
+                      clipBehavior: Clip.hardEdge, // Ensures child respects border radius
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(isSmallScreen ? 15 : 20),
                       ),
                       child: Stack(
                         children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(isSmallScreen ? 15 : 20),
-                            child: GoogleMap(
+                          if (_currentPosition != null)
+                            GoogleMap(
                               mapType: MapType.normal,
-                              initialCameraPosition: CameraPosition( // Camera now centers on current device or default
-                                target: _currentPosition ?? const LatLng(2.9331, 101.7980),
-                                zoom: 14.4746,
+                              initialCameraPosition: CameraPosition(
+                                target: _currentPosition!,
+                                zoom: 12.0,
                               ),
-                              markers: _markers, // These now include other users
+                              markers: _markers.union(_liveMarkers),
                               circles: _circles,
                               onMapCreated: (GoogleMapController controller) {
                                 if (!_mapControllerCompleter.isCompleted) {
@@ -282,63 +340,27 @@ class _MapScreenState extends State<MapScreen> {
                                 }
                               },
                               zoomControlsEnabled: false,
-                              myLocationButtonEnabled: false, 
-                              myLocationEnabled: false, // Set to false if you are using a custom 'current_location' marker
-                                                       // or true if you want the blue dot AND your custom marker.
-                              compassEnabled: false,
+                              myLocationButtonEnabled: false, // We use a custom FAB
+                              myLocationEnabled: true,
+                              compassEnabled: true,
                               mapToolbarEnabled: false,
-                              buildingsEnabled: true,
-                              trafficEnabled: false,
-                              liteModeEnabled: false,
-                              tiltGesturesEnabled: false,
-                              rotateGesturesEnabled: false,
+                            )
+                          else
+                            const Center(child: CircularProgressIndicator()),
+                          
+                          Positioned(
+                            bottom: 20,
+                            right: 20,
+                            child: FloatingActionButton(
+                              onPressed: _goToCurrentLocation,
+                              child: const Icon(Icons.my_location),
+                              backgroundColor: Colors.white,
                             ),
                           ),
-                          Positioned(
-                            top: isSmallScreen ? 12.0 : 20.0,
-                            right: isSmallScreen ? 12.0 : 20.0,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _buildMapControl(Icons.zoom_in, _zoomIn, controlSize),
-                                SizedBox(height: controlSpacing),
-                                _buildMapControl(Icons.zoom_out, _zoomOut, controlSize),
-                                SizedBox(height: controlSpacing),
-                                _buildMapControl(Icons.my_location, () => _goToCurrentLocation(), controlSize),
-                              ],
-                            ),
-                          ),
-                          Positioned(
-                            bottom: isSmallScreen ? 12.0 : 20.0,
-                            left: isSmallScreen ? 12.0 : 20.0,
-                            child: Container(
-                              padding: legendPadding,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(isSmallScreen ? 6 : 8),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _buildMapLegend('Safe Zone Area', Colors.green.shade400, legendFontSize),
-                                  SizedBox(height: legendSpacing),
-                                  _buildMapLegend('High-Risk Zone Area', Colors.red.shade400, legendFontSize),
-                                   // You might want to add a legend for 'Your Location' and 'Other Users'
-                                  SizedBox(height: legendSpacing),
-                                  _buildMapLegend('Your Location', Colors.green, legendFontSize), // Example
-                                  SizedBox(height: legendSpacing),
-                                  _buildMapLegend('Other Users', Colors.blue, legendFontSize), // Example
-                                ],
-                              ),
-                            ),
+                           Positioned(
+                            bottom: 20,
+                            left: 20,
+                            child: _buildLegend(),
                           ),
                         ],
                       ),
@@ -352,106 +374,4 @@ class _MapScreenState extends State<MapScreen> {
       ),
     );
   }
-  
-  Future<void> _zoomIn() async {
-    if (!_mapControllerCompleter.isCompleted) return;
-    final GoogleMapController controller = await _mapControllerCompleter.future;
-    controller.animateCamera(CameraUpdate.zoomIn());
-  }
-  
-  Future<void> _zoomOut() async {
-    if (!_mapControllerCompleter.isCompleted) return;
-    final GoogleMapController controller = await _mapControllerCompleter.future;
-    controller.animateCamera(CameraUpdate.zoomOut());
-  }
-  
-  Future<void> _goToCurrentLocation({bool initial = false}) async {
-    if (_currentPosition == null) return;
-    // Check if controller is completed before accessing .future
-    if (!_mapControllerCompleter.isCompleted) return; 
-    final GoogleMapController controller = await _mapControllerCompleter.future;
-    // No need to check controller for null if we awaited a completed future
-    
-    controller.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: _currentPosition!,
-          zoom: initial ? 14.4746 : 16.0, 
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCircleMarker(Color color, double size) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        border: Border.all(color: Colors.white, width: 3),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.4),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMapControl(IconData icon, VoidCallback onTap, [double? size]) {
-    final controlSize = size ?? 40.0;
-    final iconSize = controlSize * 0.5;
-    
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: controlSize,
-        height: controlSize,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Icon(icon, color: Colors.grey[700], size: iconSize),
-      ),
-    );
-  }
-
-  Widget _buildMapLegend(String text, Color color, [double? fontSize]) {
-    final textSize = fontSize ?? 12.0;
-    final circleSize = textSize * 1.25;
-    
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: circleSize,
-          height: circleSize,
-          decoration: BoxDecoration(
-            // If using for user markers, maybe use a different shape or icon
-            color: color, // Marker color
-            shape: BoxShape.circle, 
-            border: Border.all(color: Colors.white, width: 1.5)
-          ),
-        ),
-        SizedBox(width: textSize * 0.67),
-        Text(
-          text,
-          style: TextStyle(fontSize: textSize, color: Colors.black87),
-        ),
-      ],
-    );
-  }
-
-  // _buildNavItem is not used in MapScreen directly, it seems to be from a parent/different widget.
-  // Widget _buildNavItem(IconData icon, String label, int index, VoidCallback onTap) { ... }
 }

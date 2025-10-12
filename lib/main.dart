@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart'; // Added for DateFormat
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:media_store_plus/media_store_plus.dart';
+import 'package:safesync/services/permission_service.dart';
 
 // Firebase Imports
 import 'package:firebase_core/firebase_core.dart';
@@ -32,37 +34,40 @@ import 'services/emergency_service.dart';
 import 'services/lockscreen_service.dart';
 import 'services/location_service.dart';
 import 'services/auto_call_service.dart';
+import 'services/video_recording_service.dart';
 
 // Initialize flutter_local_notifications plugin instance globally
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
 
-Future<void> main() async { 
-  WidgetsFlutterBinding.ensureInitialized();
+void main() {
+  runZonedGuarded<Future<void>>(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Load the .env file
-  await dotenv.load(fileName: ".env");
+    // Load the .env file
+    await dotenv.load(fileName: ".env");
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+    await MediaStore.ensureInitialized();
 
-  const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/ic_launcher');
-  final DarwinInitializationSettings initializationSettingsDarwin =
-      DarwinInitializationSettings(
-          onDidReceiveLocalNotification: (id, title, body, payload) async {
-    // Handle notification tapped logic here if needed for older iOS versions
-  });
-  final InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid, iOS: initializationSettingsDarwin);
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse notificationResponse) async {
-    // Handle notification tapped logic here
-  });
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
 
-  runZonedGuarded(() {
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    final DarwinInitializationSettings initializationSettingsDarwin =
+        DarwinInitializationSettings(
+            onDidReceiveLocalNotification: (id, title, body, payload) async {
+      // Handle notification tapped logic here if needed for older iOS versions
+    });
+    final InitializationSettings initializationSettings = InitializationSettings(
+        android: initializationSettingsAndroid, iOS: initializationSettingsDarwin);
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse notificationResponse) async {
+      // Handle notification tapped logic here
+    });
+
     runApp(const SafeSyncApp());
   }, (error, stackTrace) {
     debugPrint('App Error: $error', wrapWidth: 1024);
@@ -482,13 +487,28 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late LockscreenService _lockscreenService;
   late LocationService _locationService;
   late AutoCallService _autoCallService;
+  final VideoRecordingService _videoRecordingService = VideoRecordingService();
   bool _didLoadLockscreenStateInitial = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PermissionService.requestAllPermissions();
+    });
     _locationService = LocationService();
     _autoCallService = AutoCallService();
+    _videoRecordingService.initCamera();
+    _videoRecordingService.isRecording.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+    _videoRecordingService.isReady.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
     _lockscreenService = LockscreenService(
       flutterLocalNotificationsPlugin: flutterLocalNotificationsPlugin,
       getName: () => widget.name,
@@ -584,6 +604,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void dispose() {
     _fallDetectionService.dispose();
     _shakeDetectionService.dispose();
+    _videoRecordingService.dispose();
     if (_locationService.isCurrentlySharing()) {
       debugPrint("HomeScreen disposing: Stopping location sharing.");
       _locationService.stopSharingLocation();
@@ -600,32 +621,51 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _toggleButton(String buttonKey) {
-    setState(() {
-      buttonPressed[buttonKey] = !buttonPressed[buttonKey]!;
-      if (buttonKey == 'emergency') {
+  void _toggleButton(String buttonKey) async {
+    if (buttonKey == 'emergency') {
+      if (!_videoRecordingService.isReady.value) {
+        debugPrint("HomeScreen: Emergency button pressed, but camera is not ready.");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Camera not ready yet, please wait.')),
+        );
+        return;
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final isAutoRecordingEnabled = prefs.getBool('auto_recording') ?? false;
+
+      setState(() {
+        buttonPressed[buttonKey] = !buttonPressed[buttonKey]!;
         bool isEmergencyActive = buttonPressed['emergency']!;
-        buttonPressed['location'] = isEmergencyActive; 
+        buttonPressed['location'] = isEmergencyActive;
         if (isEmergencyActive) {
           debugPrint("HomeScreen: Emergency Mode ARMED. Location Sharing also ACTIVATED.");
-          _locationService.startSharingLocation(); 
+          _locationService.startSharingLocation();
+          if (isAutoRecordingEnabled) {
+            _videoRecordingService.handleEmergencyTrigger();
+          }
         } else {
           debugPrint("HomeScreen: Emergency Mode DISARMED. Location Sharing also DEACTIVATED.");
           _locationService.stopSharingLocation();
         }
-      } else if (buttonKey == 'location') {
-        if (buttonPressed['location']!) {
-          debugPrint("HomeScreen: Location Sharing ACTIVATED independently.");
-          _locationService.startSharingLocation();
-        } else {
-          debugPrint("HomeScreen: Location Sharing DEACTIVATED independently.");
-          _locationService.stopSharingLocation();
+      });
+    } else {
+      setState(() {
+        buttonPressed[buttonKey] = !buttonPressed[buttonKey]!;
+        if (buttonKey == 'location') {
+          if (buttonPressed['location']!) {
+            debugPrint("HomeScreen: Location Sharing ACTIVATED independently.");
+            _locationService.startSharingLocation();
+          } else {
+            debugPrint("HomeScreen: Location Sharing DEACTIVATED independently.");
+            _locationService.stopSharingLocation();
+          }
+        } else if (buttonKey == 'call') {
+          // The logic for auto-call is handled in the EmergencyService,
+          // so we don't need to do anything special here other than toggle the state.
         }
-      } else if (buttonKey == 'call') {
-        // The logic for auto-call is handled in the EmergencyService, 
-        // so we don't need to do anything special here other than toggle the state.
-      }
-    });
+      });
+    }
   }
 
   String _formatDateTimeLocal(DateTime dt) {
@@ -704,6 +744,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildActivityIndicator(Icons.emergency_recording_rounded, "Automatic\nRecording", onTap: () => Navigator.pushNamed(context, '/recording-settings')),
+                   if (_videoRecordingService.isRecording.value)
+                    _buildActivityIndicator(Icons.videocam, "Recording..."),
+                  if (!_videoRecordingService.isReady.value && !_videoRecordingService.isRecording.value)
+                    _buildActivityIndicator(Icons.videocam_off, "Camera not ready"),
                 ],
               ),
               const SizedBox(height: 15),
@@ -713,7 +757,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     children: [
                       Row(children: [Expanded(child: _buildFeatureButton("Emergency Mode", "Tap panic to activate", Icons.warning_amber, 'emergency')), const SizedBox(width: 12), Expanded(child: _buildFeatureButton("AI Voice Recognition", "Always listen for distress", Icons.graphic_eq, 'voice'))]),
                       const SizedBox(height: 12),
-                      Row(children: [Expanded(child: _buildFeatureButton("Auto Call", "Emergency contact", Icons.phone_callback, 'call')), const SizedBox(width: 12), Expanded(child: _buildFeatureButton("Location Sharing", "Real-time GPS tracking", Icons.my_location, 'location'))]),
+                      Row(children: [Expanded(child: _buildFeatureButton("Auto Call", "If there is no response", Icons.phone_callback, 'call')), const SizedBox(width: 12), Expanded(child: _buildFeatureButton("Location Sharing", "Real-time GPS tracking", Icons.my_location, 'location'))]),
                       const SizedBox(height: 16),
                       _buildStatusCard("Last Fall Detected", lastFallDisplayStatus),
                       const SizedBox(height: 12),
@@ -737,10 +781,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildFeatureButton(String title, String subtitle, IconData icon, String buttonKey) {
     bool isPressed = buttonPressed[buttonKey] ?? false;
+    bool isCameraReady = _videoRecordingService.isReady.value;
+    // Disable the button if it's the emergency button and the camera isn't ready.
+    bool isDisabled = buttonKey == 'emergency' && !isCameraReady;
+
     return GestureDetector(
-      onTap: () => _toggleButton(buttonKey),
-      child: AnimatedContainer(duration: const Duration(milliseconds: 200), height: 80, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isPressed ? const Color(0xFFDD0000) : Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))]),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Icon(icon, color: isPressed ? Colors.white : const Color(0xFFDD0000), size: 20), const Spacer(), if (isPressed) Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle))]), const SizedBox(height: 4), Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: isPressed ? Colors.white : Colors.black)), Text(subtitle, style: TextStyle(fontSize: 10, color: isPressed ? Colors.white70 : Colors.grey[600]), maxLines: 1, overflow: TextOverflow.ellipsis)]),
+      onTap: isDisabled ? null : () => _toggleButton(buttonKey),
+      child: Opacity(
+        opacity: isDisabled ? 0.5 : 1.0,
+        child: AnimatedContainer(duration: const Duration(milliseconds: 200), height: 80, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isPressed ? const Color(0xFFDD0000) : Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))]),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Icon(icon, color: isPressed ? Colors.white : const Color(0xFFDD0000), size: 20), const Spacer(), if (isPressed) Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle))]), const SizedBox(height: 4), Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: isPressed ? Colors.white : Colors.black)), Text(subtitle, style: TextStyle(fontSize: 10, color: isPressed ? Colors.white70 : Colors.grey[600]), maxLines: 1, overflow: TextOverflow.ellipsis)]),
+        ),
       ),
     );
   }
