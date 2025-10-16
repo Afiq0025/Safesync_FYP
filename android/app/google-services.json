@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "831433122920",
+    "project_id": "safesync-9ae17",
+    "storage_bucket": "safesync-9ae17.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:831433122920:android:e59b28b7ca31f317b687dd",
+        "android_client_info": {
+          "package_name": "com.fyp.safesync.safesync"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdzoo6o_lOSdn8vP5dX1dJt6yZ466r0ok"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
