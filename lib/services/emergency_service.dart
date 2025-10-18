@@ -24,8 +24,8 @@ class EmergencyService {
     required this.isAutoCallActive, // Require it in the constructor
   });
 
-  Future<void> handleEmergencyTrigger() async {
-    if (!isEmergencyButtonActive()) {
+  Future<void> handleEmergencyTrigger({bool force = false}) async {
+    if (!isEmergencyButtonActive() && !force) {
       debugPrint(
           "EmergencyService: Triggered, but Emergency Mode feature is not active. No dialog shown.");
       return;

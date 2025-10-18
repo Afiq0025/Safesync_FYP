@@ -9,9 +9,10 @@ import 'package:safesync/services/permission_service.dart';
 // Firebase Imports
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'package:firebase_auth/firebase_auth.dart'; 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'services/voice_recogniton_services.dart';
 import 'package:safesync/screens/community/report_screen.dart';
 import 'package:safesync/screens/emergency/emergency_contacts.dart';
 import 'package:safesync/widgets/pulse_icon.dart';
@@ -22,14 +23,11 @@ import 'screens/settings/recording_settings.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/home/pair_smart_devices.dart';
 import 'screens/map/map_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:sensors_plus/sensors_plus.dart'; // For Fall Detection & Shake
-import 'dart:math'; // For sqrt, pow
 
 // Services
 import 'services/fall_detection_service.dart';
-import 'services/shake_detection_service.dart'; 
+import 'services/shake_detection_service.dart';
 import 'services/emergency_service.dart';
 import 'services/lockscreen_service.dart';
 import 'services/location_service.dart';
@@ -88,11 +86,11 @@ class SafeSyncApp extends StatelessWidget {
         primaryColor: const Color(0xFFF36060),
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      initialRoute: '/', 
+      initialRoute: '/',
       routes: {
         '/login': (context) => const LoginScreen(),
         '/signup': (context) => const SignupScreen(),
-        '/': (context) => const SplashScreen(), 
+        '/': (context) => const SplashScreen(),
         '/main': (context) => const MainScreen(),
         '/smartwatch': (context) => const SmartwatchDetailScreen(),
         '/recording-settings': (context) => const RecordingSettingsScreen(),
@@ -137,9 +135,9 @@ class _SplashScreenState extends State<SplashScreen> {
 
   Future<void> _initializeAppAndListenToAuth() async {
     await Future.delayed(const Duration(seconds: 2));
-    if (!mounted) return; 
+    if (!mounted) return;
     _authStateSubscription = FirebaseAuth.instance.authStateChanges().listen((User? user) {
-      if (!mounted) return; 
+      if (!mounted) return;
       if (user == null) {
         debugPrint('SplashScreen: User is currently signed out! Navigating to /login.');
         Navigator.pushReplacementNamed(context, '/login');
@@ -150,7 +148,7 @@ class _SplashScreenState extends State<SplashScreen> {
     }, onError: (error) {
       debugPrint('SplashScreen: Error in authStateChanges stream: $error');
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/login'); 
+        Navigator.pushReplacementNamed(context, '/login');
       }
     });
   }
@@ -195,15 +193,15 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int currentIndex = 0;
   int _batteryLevel = 0;
-  String _name = "User Name"; 
-  String _phoneNumber = "N/A"; 
-  String _email = "N/A"; 
-  String _address = "Address Default"; 
-  String _bloodType = "Blood Type Default"; 
-  String _allergies = "Allergies Default"; 
-  String _medicalConditions = "Conditions Default"; 
-  String _medications = "Medications Default"; 
-  bool _isInitialDataLoaded = false; 
+  String _name = "User Name";
+  String _phoneNumber = "N/A";
+  String _email = "N/A";
+  String _address = "Address Default";
+  String _bloodType = "Blood Type Default";
+  String _allergies = "Allergies Default";
+  String _medicalConditions = "Conditions Default";
+  String _medications = "Medications Default";
+  bool _isInitialDataLoaded = false;
   static const platform = MethodChannel('com.fyp.safesync.safesync/heartrate');
   int _heartRate = 0;
   String _heartStatus = "Connecting...";
@@ -223,7 +221,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     if (!_isInitialDataLoaded) {
       debugPrint("MainScreen: didChangeDependencies, initial data load.");
       _loadData();
-      _isInitialDataLoaded = true; 
+      _isInitialDataLoaded = true;
     }
   }
   
@@ -238,7 +236,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       debugPrint("MainScreen: App resumed, reloading data.");
-      _loadData(); 
+      _loadData();
     }
   }
 
@@ -258,8 +256,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     Map<String, dynamic> firestoreData = {};
     User? freshCurrentUser = currentUser;
     try {
-      await freshCurrentUser.reload(); 
-      freshCurrentUser = FirebaseAuth.instance.currentUser; 
+      await freshCurrentUser.reload();
+      freshCurrentUser = FirebaseAuth.instance.currentUser;
       if (freshCurrentUser == null) { // User might have been disabled/deleted
          debugPrint("MainScreen (_loadData): CurrentUser became null after reload. Navigating to login.");
          if (mounted) {
@@ -288,7 +286,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     setState(() {
       _email = currentUser.email ?? userData['email'] as String? ?? _email;
-      _name = currentUser.displayName ?? userData['fullName'] as String? ?? _name; 
+      _name = currentUser.displayName ?? userData['fullName'] as String? ?? _name;
       _phoneNumber = userData['phoneNumber'] as String? ?? _phoneNumber;
       _address = userData['address'] as String? ?? _address;
       _bloodType = userData['bloodType'] as String? ?? _bloodType;
@@ -481,6 +479,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     'call': false,      
     'location': false,  
   };
+  late VoiceRecognitionService _voiceRecognitionService;
   late FallDetectionService _fallDetectionService;
   late ShakeDetectionService _shakeDetectionService;
   late EmergencyService _emergencyService;
@@ -518,6 +517,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       getMedicalConditions: () => widget.medicalConditions,
       getMedications: () => widget.medications,
     );
+
+    // Initialize Voice Recognition Service
+    _voiceRecognitionService = VoiceRecognitionService(
+      onEmergencyPhraseDetected: _handleEmergencyPhrase,
+      onStatusChanged: (isListening) {
+        if (mounted) {
+          setState(() {
+            buttonPressed['voice'] = isListening;
+          });
+        }
+      },
+    );
+    _voiceRecognitionService.initSpeech();
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -532,7 +544,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       onStartLocationSharing: _locationService.startSharingLocation,
       onInitiateAutoCall: _autoCallService.initiateFakeAutoCallToPolice,
       isEmergencyButtonActive: () => buttonPressed['emergency'] ?? false,
-      isAutoCallActive: () => buttonPressed['call'] ?? false, // Add this line
+      isAutoCallActive: () => buttonPressed['call'] ?? false,
     );
     _fallDetectionService = FallDetectionService(
       onFallDetected: _updateLastFallDetected,
@@ -557,8 +569,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _handleVigorousShake() {
     if (mounted) {
-      debugPrint("HomeScreen: Vigorous shake detected. Triggering emergency.");
-      _emergencyService.handleEmergencyTrigger();
+      debugPrint("HomeScreen: Vigorous shake detected. Triggering emergency confirmation.");
+      // Only trigger if the emergency button is actually active
+      if(buttonPressed['emergency'] == true) {
+        _emergencyService.handleEmergencyTrigger();
+      }
+    }
+  }
+
+  void _handleEmergencyPhrase() {
+    if (mounted) {
+      debugPrint("HomeScreen: Emergency phrase detected. Triggering emergency confirmation, regardless of button state.");
+      _emergencyService.handleEmergencyTrigger(force: true);
     }
   }
 
@@ -604,6 +626,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void dispose() {
     _fallDetectionService.dispose();
     _shakeDetectionService.dispose();
+    _voiceRecognitionService.dispose();
     _videoRecordingService.dispose();
     if (_locationService.isCurrentlySharing()) {
       debugPrint("HomeScreen disposing: Stopping location sharing.");
@@ -623,32 +646,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _toggleButton(String buttonKey) async {
     if (buttonKey == 'emergency') {
-      if (!_videoRecordingService.isReady.value) {
-        debugPrint("HomeScreen: Emergency button pressed, but camera is not ready.");
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Camera not ready yet, please wait.')),
-        );
-        return;
-      }
-
-      final prefs = await SharedPreferences.getInstance();
-      final isAutoRecordingEnabled = prefs.getBool('auto_recording') ?? false;
-
       setState(() {
-        buttonPressed[buttonKey] = !buttonPressed[buttonKey]!;
-        bool isEmergencyActive = buttonPressed['emergency']!;
-        buttonPressed['location'] = isEmergencyActive;
-        if (isEmergencyActive) {
-          debugPrint("HomeScreen: Emergency Mode ARMED. Location Sharing also ACTIVATED.");
-          _locationService.startSharingLocation();
-          if (isAutoRecordingEnabled) {
-            _videoRecordingService.handleEmergencyTrigger();
-          }
-        } else {
-          debugPrint("HomeScreen: Emergency Mode DISARMED. Location Sharing also DEACTIVATED.");
-          _locationService.stopSharingLocation();
-        }
+        buttonPressed['emergency'] = !buttonPressed['emergency']!;
+        debugPrint("HomeScreen: Emergency Mode Toggled. Is Active: ${buttonPressed['emergency']}");
       });
+    } else if (buttonKey == 'voice') {
+      if (_voiceRecognitionService.isListening) {
+        _voiceRecognitionService.stopListening();
+      } else {
+        _voiceRecognitionService.startListening();
+      }
     } else {
       setState(() {
         buttonPressed[buttonKey] = !buttonPressed[buttonKey]!;
@@ -660,9 +667,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             debugPrint("HomeScreen: Location Sharing DEACTIVATED independently.");
             _locationService.stopSharingLocation();
           }
-        } else if (buttonKey == 'call') {
-          // The logic for auto-call is handled in the EmergencyService,
-          // so we don't need to do anything special here other than toggle the state.
         }
       });
     }
@@ -734,7 +738,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ],
               ),
               const SizedBox(height: 5),
-              PulseIcon(icon: Icons.favorite, pulseColor: Colors.white70, iconColor: Colors.redAccent, iconSize: 40, innerSize: 45, pulseSize: 116, pulseCount: 3),
+              const PulseIcon(icon: Icons.favorite, pulseColor: Colors.white70, iconColor: Colors.redAccent, iconSize: 40, innerSize: 45, pulseSize: 116, pulseCount: 3),
               const SizedBox(height: 10),
               Text(widget.currentHeartRate > 0 ? '${widget.currentHeartRate} BpM' : '-- BpM', style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white)),
               Text('Heart Rate - ${widget.currentHeartStatus}', style: const TextStyle(fontSize: 14, color: Colors.white70)),
@@ -755,9 +759,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 child: SingleChildScrollView(
                   child: Column(
                     children: [
-                      Row(children: [Expanded(child: _buildFeatureButton("Emergency Mode", "Tap panic to activate", Icons.warning_amber, 'emergency')), const SizedBox(width: 12), Expanded(child: _buildFeatureButton("AI Voice Recognition", "Always listen for distress", Icons.graphic_eq, 'voice'))]),
+                      Row(children: [Expanded(child: _buildFeatureButton("Emergency Mode", "Tap to arm/disarm", Icons.warning_amber, 'emergency')), const SizedBox(width: 12), Expanded(child: _buildFeatureButton("AI Voice Recognition", "Listens for distress", Icons.graphic_eq, 'voice'))]),
                       const SizedBox(height: 12),
-                      Row(children: [Expanded(child: _buildFeatureButton("Auto Call", "If there is no response", Icons.phone_callback, 'call')), const SizedBox(width: 12), Expanded(child: _buildFeatureButton("Location Sharing", "Real-time GPS tracking", Icons.my_location, 'location'))]),
+                      Row(children: [Expanded(child: _buildFeatureButton("Auto Call", "If no response", Icons.phone_callback, 'call')), const SizedBox(width: 12), Expanded(child: _buildFeatureButton("Location Sharing", "Real-time GPS tracking", Icons.my_location, 'location'))]),
                       const SizedBox(height: 16),
                       _buildStatusCard("Last Fall Detected", lastFallDisplayStatus),
                       const SizedBox(height: 12),
@@ -781,30 +785,33 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildFeatureButton(String title, String subtitle, IconData icon, String buttonKey) {
     bool isPressed = buttonPressed[buttonKey] ?? false;
-    bool isCameraReady = _videoRecordingService.isReady.value;
-    // Disable the button if it's the emergency button and the camera isn't ready.
-    bool isDisabled = buttonKey == 'emergency' && !isCameraReady;
 
     return GestureDetector(
-      onTap: isDisabled ? null : () => _toggleButton(buttonKey),
-      child: Opacity(
-        opacity: isDisabled ? 0.5 : 1.0,
-        child: AnimatedContainer(duration: const Duration(milliseconds: 200), height: 80, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isPressed ? const Color(0xFFDD0000) : Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))]),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Icon(icon, color: isPressed ? Colors.white : const Color(0xFFDD0000), size: 20), const Spacer(), if (isPressed) Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle))]), const SizedBox(height: 4), Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: isPressed ? Colors.white : Colors.black)), Text(subtitle, style: TextStyle(fontSize: 10, color: isPressed ? Colors.white70 : Colors.grey[600]), maxLines: 1, overflow: TextOverflow.ellipsis)]),
-        ),
+      onTap: () => _toggleButton(buttonKey),
+      child: AnimatedContainer(duration: const Duration(milliseconds: 200), height: 80, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isPressed ? const Color(0xFFDD0000) : Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))]),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(icon, color: isPressed ? Colors.white : const Color(0xFFDD0000), size: 20), 
+            const Spacer(), 
+            if (isPressed) Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle))
+          ]), 
+          const SizedBox(height: 4), 
+          Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: isPressed ? Colors.white : Colors.black)), 
+          Text(subtitle, style: TextStyle(fontSize: 10, color: isPressed ? Colors.white70 : Colors.grey[600]), maxLines: 1, overflow: TextOverflow.ellipsis)
+        ]),
       ),
     );
   }
 
   Widget _buildStatusCard(String title, String status) {
-    return Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))]), child: Text('$title : $status', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)));
+    return Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))]), child: Text('$title : $status', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)));
   }
 
   Widget _buildLockscreenCard() {
     return LayoutBuilder(builder: (context, constraints) {
       final isSmallScreen = constraints.maxWidth < 350;
-      return Container(width: double.infinity, padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 12 : 16, vertical: isSmallScreen ? 6 : 8), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), spreadRadius: 1, blurRadius: 3, offset: const Offset(0, 2))]),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [Text('Lockscreen Access', style: TextStyle(fontSize: isSmallScreen ? 13 : 14, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis), Text('Show medical information on lock screen', style: TextStyle(fontSize: isSmallScreen ? 10 : 11, color: Colors.grey), maxLines: 2, overflow: TextOverflow.ellipsis)])), const SizedBox(width: 8), Switch(value: _isLockscreenAccessEnabled, onChanged: _saveLockscreenState, activeColor: const Color(0xFFDD0000), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap)])
+      return Container(width: double.infinity, padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? 12 : 16, vertical: isSmallScreen ? 6 : 8), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(color: Colors.black12, spreadRadius: 1, blurRadius: 3, offset: Offset(0, 2))]),
+        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [Text('Lockscreen Access', style: TextStyle(fontSize: isSmallScreen ? 13 : 14, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis), Text('Show medical information on lock screen', style: TextStyle(fontSize: isSmallScreen ? 10 : 11, color: Colors.grey), maxLines: 2, overflow: TextOverflow.ellipsis)])), const SizedBox(width: 8), Switch(value: _isLockscreenAccessEnabled, onChanged: _saveLockscreenState, activeTrackColor: const Color(0xFFDD0000), materialTapTargetSize: MaterialTapTargetSize.shrinkWrap)])
       );
     });
   }

@@ -4,7 +4,7 @@ class DiscussionPost {
   final String id;
   final String content;
   final String author;
-  final Timestamp timestamp;
+  final Timestamp timestamp; // Still non-nullable here for consistency after processing
   final List<String> likes; 
   final int commentCount;
 
@@ -23,7 +23,8 @@ class DiscussionPost {
       id: doc.id,
       content: data['content'] ?? '',
       author: data['author'] ?? 'Anonymous',
-      timestamp: data['timestamp'] ?? Timestamp.now(),
+      // Safely handle potentially null timestamp from Firestore
+      timestamp: data['timestamp'] as Timestamp? ?? Timestamp.now(),
       likes: List<String>.from(data['likes'] ?? []),
       commentCount: data['commentCount'] ?? 0,
     );

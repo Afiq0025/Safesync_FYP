@@ -30,7 +30,6 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _subscribeToLocationUpdates();
     _listenToLiveLocations();
-    _createDummyZones();
   }
 
   @override
@@ -163,40 +162,6 @@ class _MapScreenState extends State<MapScreen> {
         _liveMarkers = newLiveMarkers;
       });
     }
-  }
-
-  void _createDummyZones() {
-    final List<Map<String, dynamic>> zones = [
-      // Bangi Area Mix
-      {'id': 'bangi_danger_1', 'lat': 2.9200, 'lng': 101.7550, 'radius': 500.0, 'type': 'danger'},
-      {'id': 'bangi_safe_1', 'lat': 2.9100, 'lng': 101.7450, 'radius': 300.0, 'type': 'safe'},
-      {'id': 'bangi_danger_2', 'lat': 2.9250, 'lng': 101.7600, 'radius': 400.0, 'type': 'danger'},
-      {'id': 'bangi_safe_2', 'lat': 2.9050, 'lng': 101.7500, 'radius': 600.0, 'type': 'safe'},
-
-      // Kajang Area Mix
-      {'id': 'kajang_safe_1', 'lat': 2.9900, 'lng': 101.7900, 'radius': 500.0, 'type': 'safe'},
-      {'id': 'kajang_danger_1', 'lat': 3.0000, 'lng': 101.7850, 'radius': 350.0, 'type': 'danger'},
-      {'id': 'kajang_safe_2', 'lat': 2.9850, 'lng': 101.7800, 'radius': 450.0, 'type': 'safe'},
-      {'id': 'kajang_danger_2', 'lat': 2.9980, 'lng': 101.7950, 'radius': 550.0, 'type': 'danger'},
-    ];
-
-    Set<Circle> dummyCircles = {};
-
-    for (var zone in zones) {
-      final bool isSafe = zone['type'] == 'safe';
-      dummyCircles.add(Circle(
-        circleId: CircleId(zone['id'] as String),
-        center: LatLng(zone['lat'] as double, zone['lng'] as double),
-        radius: zone['radius'] as double,
-        fillColor: isSafe ? Colors.green.withOpacity(0.3) : Colors.red.withOpacity(0.3),
-        strokeColor: isSafe ? Colors.green : Colors.red,
-        strokeWidth: 2,
-      ));
-    }
-
-    setState(() {
-      _circles.addAll(dummyCircles);
-    });
   }
 
   void _updateCurrentUserMarker() {
