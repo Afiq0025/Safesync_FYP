@@ -193,7 +193,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
       path: phoneNumber,
     );
     if (await canLaunchUrl(launchUri)) {
-      await launchUrl(launchUri);
+      await launchUrl(launchUri, mode: LaunchMode.platformDefault);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not launch dialer for $phoneNumber')),
@@ -236,13 +236,13 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
             onPressed: () {
               _showAddOrEditContactDialog(contact: contact);
             },
-            child: const Text('Edit', style: TextStyle(color: Color(0xFFFF5A5A))),
+            child: const Text('Edit', style: TextStyle(color: Color(0xFFFF5A5A))), 
           ),
           TextButton(
             onPressed: () {
                _makePhoneCall(contact.phone);
             },
-            child: const Text('Call', style: TextStyle(color: Color(0xFFFF5A5A))),
+            child: const Text('Call', style: TextStyle(color: Color(0xFFFF5A5A))), 
           ),
           TextButton(
             onPressed: () {
@@ -250,7 +250,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
             },
             child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
-        ],),
+        ],), 
     );
   }
 

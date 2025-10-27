@@ -125,6 +125,19 @@ class LocationService {
         debugPrint("LocationService: Error in location stream: $error");
       }
     );
+     // Explicitly set isSharing to true when starting to share
+    if (currentUser != null) {
+      String userId = currentUser!.uid;
+      try {
+        await _firestore.collection('user_live_locations').doc(userId).set({
+          'isSharing': true,
+          'userId': userId,
+          'lastUpdated': Timestamp.now(),
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint("LocationService: Error setting initial 'isSharing' to true: $e");
+      }
+    }
   }
 
   Future<void> _updateUserLocationInFirestore(Position position) async {
@@ -141,7 +154,6 @@ class LocationService {
         'lastUpdated': Timestamp.now(),
         'userId': userId,
         'userEmail': currentUser!.email,
-        'isSharing': true, 
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint("LocationService: Error updating location to Firestore: $e");

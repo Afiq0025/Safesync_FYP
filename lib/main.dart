@@ -545,6 +545,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       onInitiateAutoCall: _autoCallService.initiateFakeAutoCallToPolice,
       isEmergencyButtonActive: () => buttonPressed['emergency'] ?? false,
       isAutoCallActive: () => buttonPressed['call'] ?? false,
+      onEmergencyConfirmed: _startVideoRecording, // Pass the new callback here
     );
     _fallDetectionService = FallDetectionService(
       onFallDetected: _updateLastFallDetected,
@@ -622,6 +623,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  void _startVideoRecording() {
+    debugPrint("HomeScreen: Emergency confirmed, starting video recording.");
+    _videoRecordingService.startVideoRecording();
+  }
+
   @override
   void dispose() {
     _fallDetectionService.dispose();
@@ -656,18 +662,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       } else {
         _voiceRecognitionService.startListening();
       }
-    } else {
+    } else if (buttonKey == 'location') { // Specific logic for 'location' button
       setState(() {
         buttonPressed[buttonKey] = !buttonPressed[buttonKey]!;
-        if (buttonKey == 'location') {
-          if (buttonPressed['location']!) {
-            debugPrint("HomeScreen: Location Sharing ACTIVATED independently.");
-            _locationService.startSharingLocation();
-          } else {
-            debugPrint("HomeScreen: Location Sharing DEACTIVATED independently.");
-            _locationService.stopSharingLocation();
-          }
+        if (buttonPressed['location']!) {
+          debugPrint("HomeScreen: Location Sharing ACTIVATED independently.");
+          _locationService.startSharingLocation();
+        } else {
+          debugPrint("HomeScreen: Location Sharing DEACTIVATED independently.");
+          _locationService.stopSharingLocation();
         }
+      });
+    } else if (buttonKey == 'call') { // Specific logic for 'call' button
+      setState(() {
+        buttonPressed[buttonKey] = !buttonPressed[buttonKey]!;
+        debugPrint("HomeScreen: Auto Call Toggled. Is Active: ${buttonPressed['call']}");
       });
     }
   }

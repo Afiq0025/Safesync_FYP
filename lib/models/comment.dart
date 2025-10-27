@@ -4,13 +4,13 @@ class Comment {
   final String id;
   final String content;
   final String author;
-  final Timestamp timestamp;
+  final Timestamp? timestamp;
 
   Comment({
     required this.id,
     required this.content,
     required this.author,
-    required this.timestamp,
+    this.timestamp,
   });
 
   factory Comment.fromFirestore(DocumentSnapshot doc) {
@@ -19,7 +19,7 @@ class Comment {
       id: doc.id,
       content: data['content'] ?? '',
       author: data['author'] ?? 'Anonymous',
-      timestamp: data['timestamp'] ?? Timestamp.now(),
+      timestamp: data['timestamp'],
     );
   }
 }

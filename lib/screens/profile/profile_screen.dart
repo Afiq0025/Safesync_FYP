@@ -31,8 +31,20 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
+  late TextEditingController _addressController;
+  late TextEditingController _bloodTypeController;
+  late TextEditingController _allergiesController;
+  late TextEditingController _medicalConditionsController;
+  late TextEditingController _medicationsController;
+
   bool _isEditingName = false;
   bool _isEditingPhone = false;
+  bool _isEditingAddress = false;
+  bool _isEditingBloodType = false;
+  bool _isEditingAllergies = false;
+  bool _isEditingMedicalConditions = false;
+  bool _isEditingMedications = false;
+
   bool _isLoading = false;
 
   Map<String, bool> expandedSections = {
@@ -48,13 +60,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _nameController = TextEditingController(text: widget.name);
     _phoneController = TextEditingController(text: widget.phoneNumber);
+    _addressController = TextEditingController(text: widget.address);
+    _bloodTypeController = TextEditingController(text: widget.bloodType);
+    _allergiesController = TextEditingController(text: widget.allergies);
+    _medicalConditionsController =
+        TextEditingController(text: widget.medicalConditions);
+    _medicationsController = TextEditingController(text: widget.medications);
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _addressController.dispose();
+    _bloodTypeController.dispose();
+    _allergiesController.dispose();
+    _medicalConditionsController.dispose();
+    _medicationsController.dispose();
     super.dispose();
+  }
+
+  void _resetAllEditingStates() {
+    setState(() {
+      _isEditingName = false;
+      _isEditingPhone = false;
+      _isEditingAddress = false;
+      _isEditingBloodType = false;
+      _isEditingAllergies = false;
+      _isEditingMedicalConditions = false;
+      _isEditingMedications = false;
+    });
   }
 
   Future<void> _saveDisplayName() async {
@@ -66,7 +101,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       return;
     }
-    setState(() { _isLoading = true; });
+    setState(() {
+      _isLoading = true;
+    });
     User? currentUser = FirebaseAuth.instance.currentUser;
 
     if (currentUser == null) {
@@ -75,7 +112,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SnackBar(content: Text('User not logged in. Cannot save name.')),
         );
       }
-      setState(() { _isLoading = false; });
+      setState(() {
+        _isLoading = false;
+      });
       return;
     }
 
@@ -84,8 +123,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       // 1. Update Firebase Authentication displayName (this field name is fixed by Firebase Auth)
       await currentUser.updateProfile(displayName: newName);
-      await currentUser.reload(); 
-      
+      await currentUser.reload();
+
       // 2. Update 'fullName' field in Firestore document
       await FirebaseFirestore.instance
           .collection('users')
@@ -96,7 +135,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Name updated successfully!')),
         );
-        setState(() { _isEditingName = false; });
+        setState(() {
+          _isEditingName = false;
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -106,7 +147,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       debugPrint('Error in _saveDisplayName (Auth or Firestore): $e');
     } finally {
-      if (mounted) { setState(() { _isLoading = false; }); }
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -119,7 +164,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       return;
     }
-    setState(() { _isLoading = true; });
+    setState(() {
+      _isLoading = true;
+    });
 
     User? currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
@@ -127,7 +174,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('User not logged in. Cannot save phone number.')),
         );
-        setState(() { _isLoading = false; });
+        setState(() {
+          _isLoading = false;
+        });
       }
       return;
     }
@@ -143,7 +192,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SnackBar(content: Text('Phone number updated successfully in Firestore!')),
         );
         setState(() {
-          _isEditingPhone = false; 
+          _isEditingPhone = false;
         });
       }
     } catch (e) {
@@ -154,8 +203,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       debugPrint('Firestore Error in _savePhoneNumber: $e');
     } finally {
-      if (mounted) { 
-        setState(() { _isLoading = false; }); 
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveField(
+      String fieldName, TextEditingController controller, Function(bool) setEditingState) async {
+    if (controller.text.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$fieldName cannot be empty.')),
+        );
+      }
+      return;
+    }
+    setState(() {
+      _isLoading = true;
+    });
+
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User not logged in. Cannot save data.')),
+        );
+        setState(() {
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .set({fieldName: controller.text.trim()}, SetOptions(merge: true));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$fieldName updated successfully in Firestore!')),
+        );
+        setState(() {
+          setEditingState(false);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating $fieldName in Firestore: $e')),
+        );
+      }
+      debugPrint('Firestore Error in _saveField ($fieldName): $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -196,29 +304,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ? Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          IconButton(icon: Icon(Icons.save, color: Colors.transparent), onPressed: null),
-                          Flexible( 
+                          IconButton(
+                              icon: Icon(Icons.save, color: Colors.transparent),
+                              onPressed: null),
+                          Flexible(
                             child: TextField(
                               controller: _nameController,
                               textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: Colors.black),
-                              decoration: const InputDecoration(hintText: 'Enter your name', border: InputBorder.none),
+                              style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black),
+                              decoration: const InputDecoration(
+                                  hintText: 'Enter your name',
+                                  border: InputBorder.none),
                               autofocus: true,
                             ),
                           ),
                           _isLoading && _isEditingName
-                              ? SizedBox(height: 48, width: 48, child: Center(child: SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2)))) 
-                              : IconButton(icon: const Icon(Icons.save, color: Colors.green), onPressed: _saveDisplayName)
+                              ? SizedBox(
+                                  height: 48,
+                                  width: 48,
+                                  child: Center(
+                                      child: SizedBox(
+                                          height: 24,
+                                          width: 24,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2))))
+                              : IconButton(
+                                  icon: const Icon(Icons.save,
+                                      color: Colors.green),
+                                  onPressed: _saveDisplayName)
                         ],
                       )
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          IconButton(icon: Icon(Icons.edit, color: Colors.transparent), onPressed: null),
+                          IconButton(
+                              icon: Icon(Icons.edit, color: Colors.transparent),
+                              onPressed: null),
                           Flexible(
                             child: Text(
-                              FirebaseAuth.instance.currentUser?.displayName ?? _nameController.text,
-                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600, color: Colors.black),
+                              FirebaseAuth.instance.currentUser?.displayName ??
+                                  _nameController.text,
+                              style: const TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black),
                               textAlign: TextAlign.center,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -226,10 +358,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           IconButton(
                             icon: const Icon(Icons.edit, color: Colors.blue),
                             onPressed: () {
+                              _resetAllEditingStates();
                               setState(() {
-                                _nameController.text = FirebaseAuth.instance.currentUser?.displayName ?? widget.name;
+                                _nameController.text = FirebaseAuth
+                                        .instance.currentUser?.displayName ??
+                                    widget.name;
                                 _isEditingName = true;
-                                _isEditingPhone = false;
                               });
                             },
                           ),
@@ -240,39 +374,63 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ? Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          IconButton(icon: Icon(Icons.save, color: Colors.transparent, size: 20), onPressed: null),
+                          IconButton(
+                              icon: Icon(Icons.save,
+                                  color: Colors.transparent, size: 20),
+                              onPressed: null),
                           Flexible(
                             child: TextField(
                               controller: _phoneController,
                               textAlign: TextAlign.center,
                               keyboardType: TextInputType.phone,
-                              style: const TextStyle(fontSize: 16, color: Color(0xFF666666)),
-                              decoration: const InputDecoration(hintText: 'Enter phone number', border: InputBorder.none),
+                              style: const TextStyle(
+                                  fontSize: 16, color: Color(0xFF666666)),
+                              decoration: const InputDecoration(
+                                  hintText: 'Enter phone number',
+                                  border: InputBorder.none),
                               autofocus: true,
                             ),
                           ),
                           _isLoading && _isEditingPhone
-                              ? SizedBox(height: 48, width: 48, child: Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))))
-                              : IconButton(icon: const Icon(Icons.save, color: Colors.green, size: 20), onPressed: _savePhoneNumber)
+                              ? SizedBox(
+                                  height: 48,
+                                  width: 48,
+                                  child: Center(
+                                      child: SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2))))
+                              : IconButton(
+                                  icon: const Icon(Icons.save,
+                                      color: Colors.green, size: 20),
+                                  onPressed: _savePhoneNumber)
                         ],
                       )
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          IconButton(icon: Icon(Icons.edit, color: Colors.transparent, size: 20), onPressed: null),
+                          IconButton(
+                              icon: Icon(Icons.edit,
+                                  color: Colors.transparent, size: 20),
+                              onPressed: null),
                           Flexible(
                             child: Text(
-                              _phoneController.text.isNotEmpty ? _phoneController.text : '(No phone number)',
-                              style: const TextStyle(fontSize: 16, color: Color(0xFF666666)),
+                              _phoneController.text.isNotEmpty
+                                  ? _phoneController.text
+                                  : '(No phone number)',
+                              style: const TextStyle(
+                                  fontSize: 16, color: Color(0xFF666666)),
                               textAlign: TextAlign.center,
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.blue, size: 20),
+                            icon: const Icon(Icons.edit,
+                                color: Colors.blue, size: 20),
                             onPressed: () {
+                              _resetAllEditingStates();
                               setState(() {
                                 _isEditingPhone = true;
-                                _isEditingName = false;
                               });
                             },
                           ),
@@ -290,16 +448,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ],
             ),
             const SizedBox(height: 40),
-            _buildExpandableSection('Address', 'address', widget.address.isNotEmpty ? widget.address : 'Not set'),
+            _buildExpandableEditableSection(
+              'Address',
+              'address',
+              _addressController,
+              _isEditingAddress,
+              (bool isEditing) => setState(() => _isEditingAddress = isEditing),
+              () => _saveField('address', _addressController, (val) => _isEditingAddress = val),
+            ),
             const SizedBox(height: 12),
-            _buildExpandableSection('Blood Type', 'bloodType', widget.bloodType.isNotEmpty ? widget.bloodType : 'Not set'),
+            _buildExpandableEditableSection(
+              'Blood Type',
+              'bloodType',
+              _bloodTypeController,
+              _isEditingBloodType,
+              (bool isEditing) => setState(() => _isEditingBloodType = isEditing),
+              () => _saveField('bloodType', _bloodTypeController, (val) => _isEditingBloodType = val),
+            ),
             const SizedBox(height: 12),
-            _buildExpandableSection('Allergies', 'allergies', widget.allergies.isNotEmpty ? widget.allergies : 'Not set'),
+            _buildExpandableEditableSection(
+              'Allergies',
+              'allergies',
+              _allergiesController,
+              _isEditingAllergies,
+              (bool isEditing) => setState(() => _isEditingAllergies = isEditing),
+              () => _saveField('allergies', _allergiesController, (val) => _isEditingAllergies = val),
+            ),
             const SizedBox(height: 12),
-            _buildExpandableSection(
-                'Medical Conditions', 'medicalConditions', widget.medicalConditions.isNotEmpty ? widget.medicalConditions : 'Not set'),
+            _buildExpandableEditableSection(
+              'Medical Conditions',
+              'medicalConditions',
+              _medicalConditionsController,
+              _isEditingMedicalConditions,
+              (bool isEditing) => setState(() => _isEditingMedicalConditions = isEditing),
+              () => _saveField('medicalConditions', _medicalConditionsController, (val) => _isEditingMedicalConditions = val),
+            ),
             const SizedBox(height: 12),
-            _buildExpandableSection('Medications', 'medications', widget.medications.isNotEmpty ? widget.medications : 'Not set'),
+            _buildExpandableEditableSection(
+              'Medications',
+              'medications',
+              _medicationsController,
+              _isEditingMedications,
+              (bool isEditing) => setState(() => _isEditingMedications = isEditing),
+              () => _saveField('medications', _medicationsController, (val) => _isEditingMedications = val),
+            ),
             const SizedBox(height: 60),
             SizedBox(
               width: double.infinity,
@@ -332,7 +524,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildExpandableSection(String title, String key, String content) {
+  Widget _buildExpandableEditableSection(
+      String title,
+      String key,
+      TextEditingController controller,
+      bool isEditing,
+      Function(bool) setEditingState,
+      VoidCallback onSave) {
     bool isExpanded = expandedSections[key] ?? false;
     return Container(
       width: double.infinity,
@@ -394,17 +592,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Padding(
               padding: const EdgeInsets.only(
                   left: 20, right: 20, bottom: 18, top: 10),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  content,
-                  style: const TextStyle(
-                    color: Color(0xFF555555),
-                    fontSize: 15,
-                    height: 1.4,
-                  ),
-                ),
-              ),
+              child: isEditing
+                  ? Row(
+                      children: [
+                        Flexible(
+                          child: TextField(
+                            controller: controller,
+                            style: const TextStyle(
+                              color: Color(0xFF555555),
+                              fontSize: 15,
+                              height: 1.4,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Enter $title',
+                              border: const UnderlineInputBorder(),
+                            ),
+                            maxLines: null,
+                            autofocus: true,
+                          ),
+                        ),
+                        _isLoading && isEditing
+                            ? SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: Center(
+                                    child: SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2))))
+                            : IconButton(
+                                icon: const Icon(Icons.save,
+                                    color: Colors.green, size: 20),
+                                onPressed: onSave,
+                              ),
+                      ],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            controller.text.isNotEmpty ? controller.text : 'Not set',
+                            style: const TextStyle(
+                              color: Color(0xFF555555),
+                              fontSize: 15,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.edit,
+                              color: Colors.blue, size: 20),
+                          onPressed: () {
+                            _resetAllEditingStates();
+                            setEditingState(true);
+                          },
+                        ),
+                      ],
+                    ),
             ),
         ],
       ),
@@ -416,7 +661,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
           title: const Text(
             'Log Out',
             style: TextStyle(fontWeight: FontWeight.w600),
@@ -433,14 +679,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPressed: () async {
                 await FirebaseAuth.instance.signOut();
                 if (mounted) {
-                  Navigator.of(context).pop(); 
+                  Navigator.of(context).pop();
                   Navigator.pushNamedAndRemoveUntil(
                       context, '/login', (Route<dynamic> route) => false);
                 }
               },
               child: const Text(
                 'Log Out',
-                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                style:
+                    TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
               ),
             ),
           ],

@@ -17,6 +17,7 @@ class ReportScreen extends StatefulWidget {
 class _ReportScreenState extends State<ReportScreen> {
   int _currentTab = 0; // 0: Report, 1: Alert, 2: Discussion
   final TextEditingController _discussionController = TextEditingController();
+  final TextEditingController _discussionTitleController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +37,7 @@ class _ReportScreenState extends State<ReportScreen> {
                       color: Colors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
+                      fontFamily: 'YourCustomFont',
                     ),
                   ),
                 ],
@@ -87,6 +89,7 @@ class _ReportScreenState extends State<ReportScreen> {
             style: TextStyle(
               color: _currentTab == index ? Colors.red : Colors.white,
               fontWeight: FontWeight.bold,
+              fontFamily: 'YourCustomFont',
             ),
           ),
         ),
@@ -173,6 +176,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
+                  fontFamily: 'YourCustomFont',
                 ),
               ),
             ),
@@ -204,110 +208,150 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _buildDiscussionTab() {
-    final currentUser = FirebaseAuth.instance.currentUser;
-
-    return Column(
-      children: [
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('discussions')
-                .orderBy('timestamp', descending: true)
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Center(child: Text('Something went wrong: ${snapshot.error}'));
-              }
-
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                return const Center(child: Text('No discussions yet. Start one!'));
-              }
-
-              final posts = snapshot.data!.docs
-                  .map((doc) => DiscussionPost.fromFirestore(doc))
-                  .toList();
-
-              return ListView.builder(
-                padding: const EdgeInsets.all(15),
-                itemCount: posts.length,
-                itemBuilder: (context, index) {
-                  final post = posts[index];
-                  return _buildDiscussionPostCard(post, currentUser);
-                },
-              );
-            },
+  void _showDiscussionBottomSheet(User? currentUser) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            top: 20,
+            left: 20,
+            right: 20,
           ),
-        ),
-        _buildDiscussionInput(currentUser),
-      ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Start a New Discussion',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                  fontFamily: 'YourCustomFont',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _discussionTitleController,
+                decoration: InputDecoration(
+                  hintText: 'Title',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _discussionController,
+                maxLines: 5,
+                decoration: InputDecoration(
+                  hintText: 'Share your thoughts with the community...',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontFamily: 'YourCustomFont',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () async {
+                      await _postDiscussion(currentUser);
+                      if (mounted) {
+                        Navigator.pop(context);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                    child: const Text(
+                      'Post',
+                      style: TextStyle(
+                        fontFamily: 'YourCustomFont',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildDiscussionInput(User? currentUser) {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
-          ),
-        ],
+  Widget _buildDiscussionTab() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFFFFF),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('discussions')
+            .orderBy('timestamp', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Something went wrong: ${snapshot.error}'));
+          }
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(
+              child: Text(
+                'No discussions yet. Start one!',
+                style: TextStyle(color: Colors.black54, fontFamily: 'YourCustomFont'),
+              ),
+            );
+          }
+
+          final posts = snapshot.data!.docs
+              .map((doc) => DiscussionPost.fromFirestore(doc))
+              .toList();
+
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(0, 15, 0, 80), // Padding for FAB
+            itemCount: posts.length,
+            itemBuilder: (context, index) {
+              final post = posts[index];
+              return _buildDiscussionPostCard(post, currentUser);
+            },
+          );
+        },
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Write your thought',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _discussionController,
-            maxLines: 3,
-            decoration: InputDecoration(
-              hintText: 'Share your thoughts with the community...',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              contentPadding: const EdgeInsets.all(12),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              ElevatedButton(
-                onPressed: () => _postDiscussion(currentUser),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                ),
-                child: const Text('Post'),
-              ),
-            ],
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showDiscussionBottomSheet(currentUser),
+        backgroundColor: Colors.red,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
 
   Future<void> _postDiscussion(User? currentUser) async {
-    if (_discussionController.text.isEmpty) return;
+    if (_discussionController.text.isEmpty || _discussionTitleController.text.isEmpty) return;
 
     if (currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -317,14 +361,17 @@ class _ReportScreenState extends State<ReportScreen> {
     }
 
     await FirebaseFirestore.instance.collection('discussions').add({
+      'title': _discussionTitleController.text,
       'content': _discussionController.text,
       'author': currentUser.displayName ?? currentUser.email ?? 'Anonymous',
       'timestamp': FieldValue.serverTimestamp(),
       'likes': [],
+      'repostedBy': [],
       'commentCount': 0,
     });
 
     _discussionController.clear();
+    _discussionTitleController.clear();
   }
 
   Future<void> _toggleLike(DiscussionPost post, User? currentUser) async {
@@ -340,6 +387,21 @@ class _ReportScreenState extends State<ReportScreen> {
     }
 
     await postRef.update({'likes': currentLikes});
+  }
+
+  Future<void> _toggleRepost(DiscussionPost post, User? currentUser) async {
+    if (currentUser == null) return;
+
+    final postRef = FirebaseFirestore.instance.collection('discussions').doc(post.id);
+    final currentReposts = List<String>.from(post.repostedBy);
+
+    if (currentReposts.contains(currentUser.uid)) {
+      currentReposts.remove(currentUser.uid);
+    } else {
+      currentReposts.add(currentUser.uid);
+    }
+
+    await postRef.update({'repostedBy': currentReposts});
   }
 
   Widget _buildReportCard(Report report) {
@@ -363,6 +425,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
+                      fontFamily: 'YourCustomFont',
                     ),
                   ),
                 ),
@@ -378,6 +441,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12,
+                      fontFamily: 'YourCustomFont',
                     ),
                   ),
                 ),
@@ -389,15 +453,26 @@ class _ReportScreenState extends State<ReportScreen> {
               style: TextStyle(
                 color: Colors.grey[600],
                 fontSize: 14,
+                fontFamily: 'YourCustomFont',
               ),
             ),
             const SizedBox(height: 12),
-            Text(report.description),
+            Text(
+              report.description,
+              style: const TextStyle(
+                fontFamily: 'YourCustomFont',
+              ),
+            ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               children: report.tags.map((tag) => Chip(
-                label: Text(tag),
+                label: Text(
+                  tag,
+                  style: const TextStyle(
+                    fontFamily: 'YourCustomFont',
+                  ),
+                ),
                 backgroundColor: Colors.grey[200],
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               )).toList(),
@@ -408,6 +483,7 @@ class _ReportScreenState extends State<ReportScreen> {
               style: const TextStyle(
                 fontStyle: FontStyle.italic,
                 color: Colors.grey,
+                fontFamily: 'YourCustomFont',
               ),
             ),
           ],
@@ -437,6 +513,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
+                      fontFamily: 'YourCustomFont',
                     ),
                   ),
                 ),
@@ -452,6 +529,7 @@ class _ReportScreenState extends State<ReportScreen> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12,
+                      fontFamily: 'YourCustomFont',
                     ),
                   ),
                 ),
@@ -463,15 +541,26 @@ class _ReportScreenState extends State<ReportScreen> {
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 color: Colors.red,
+                fontFamily: 'YourCustomFont',
               ),
             ),
             const SizedBox(height: 8),
-            Text(description),
+            Text(
+              description,
+              style: const TextStyle(
+                fontFamily: 'YourCustomFont',
+              ),
+            ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               children: tags.map((tag) => Chip(
-                label: Text(tag),
+                label: Text(
+                  tag,
+                  style: const TextStyle(
+                    fontFamily: 'YourCustomFont',
+                  ),
+                ),
                 backgroundColor: Colors.white,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               )).toList(),
@@ -484,67 +573,110 @@ class _ReportScreenState extends State<ReportScreen> {
 
   Widget _buildDiscussionPostCard(DiscussionPost post, User? currentUser) {
     final bool isLiked = currentUser != null && post.likes.contains(currentUser.uid);
+    final bool isReposted = currentUser != null && post.repostedBy.contains(currentUser.uid);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 15),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(15),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              post.content, 
-              style: const TextStyle(
-                fontSize: 15,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              '${post.author} • ${_formatTimestamp(post.timestamp)}', 
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Row(
+    return Container(
+      color: Colors.transparent,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(15.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                IconButton(
-                  icon: Icon(
-                    isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                    color: isLiked ? Colors.red : Colors.grey,
-                  ),
-                  onPressed: () => _toggleLike(post, currentUser),
-                  iconSize: 20,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
-                const SizedBox(width: 4),
-                Text('${post.likes.length}'),
-                const SizedBox(width: 20),
-                IconButton(
-                  icon: const Icon(Icons.comment_outlined),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => DiscussionDetailScreen(post: post),
+                // Left column for avatar
+                Column(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: const Color(0xFFE1D5E7),
+                      child: Text(
+                        post.author.isNotEmpty ? post.author[0].toUpperCase() : 'A',
+                        style: const TextStyle(color: Colors.black87),
                       ),
-                    );
-                  },
-                  iconSize: 20,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                Text('${post.commentCount}'),
+                const SizedBox(width: 15),
+                // Right column for content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Author and timestamp
+                      Row(
+                        children: [
+                          Text(
+                            post.author,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'YourCustomFont'),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _formatTimestamp(post.timestamp),
+                            style: TextStyle(color: Colors.grey[600], fontSize: 12, fontFamily: 'YourCustomFont'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Title and content
+                      Text(
+                        post.title,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'YourCustomFont'),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        post.content,
+                        style: const TextStyle(fontSize: 15, fontFamily: 'YourCustomFont'),
+                        maxLines: 10,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 16),
+                      // Action buttons
+                      Row(
+                        children: [
+                          // Like button
+                          IconButton(
+                            icon: Icon(isLiked ? Icons.favorite : Icons.favorite_border, color: isLiked ? Colors.red : Colors.grey, size: 20),
+                            onPressed: () => _toggleLike(post, currentUser),
+                            constraints: const BoxConstraints(),
+                            padding: EdgeInsets.zero,
+                          ),
+                          const SizedBox(width: 4),
+                          Text('${post.likes.length}', style: const TextStyle(fontFamily: 'YourCustomFont')),
+                          const SizedBox(width: 24),
+                          // Comment button
+                          IconButton(
+                            icon: const Icon(Icons.mode_comment_outlined, size: 20, color: Colors.grey),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => DiscussionDetailScreen(post: post)),
+                              );
+                            },
+                            constraints: const BoxConstraints(),
+                            padding: EdgeInsets.zero,
+                          ),
+                          const SizedBox(width: 4),
+                          Text('${post.commentCount}', style: const TextStyle(fontFamily: 'YourCustomFont')),
+                          const SizedBox(width: 24),
+                          // Repost button
+                          IconButton(
+                            icon: Icon(Icons.repeat, color: isReposted ? Colors.green : Colors.grey, size: 20),
+                            onPressed: () => _toggleRepost(post, currentUser),
+                            constraints: const BoxConstraints(),
+                            padding: EdgeInsets.zero,
+                          ),
+                          const SizedBox(width: 4),
+                          Text('${post.repostedBy.length}', style: const TextStyle(fontFamily: 'YourCustomFont')),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+          const Divider(height: 1, thickness: 1),
+        ],
       ),
     );
   }
@@ -570,6 +702,7 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   void dispose() {
     _discussionController.dispose();
+    _discussionTitleController.dispose();
     super.dispose();
   }
 }

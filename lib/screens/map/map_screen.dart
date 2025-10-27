@@ -20,9 +20,11 @@ class _MapScreenState extends State<MapScreen> {
   Set<Marker> _liveMarkers = {}; // Markers for other users
   Set<Circle> _circles = {};
   LatLng? _currentPosition;
+  LatLng? _initialMapCenter; // New variable for initial map center
 
   StreamSubscription? _liveLocationsSubscription;
   StreamSubscription<Position>? _positionStreamSubscription; // For user's own location
+  StreamSubscription? _zonesSubscription; // New subscription for zones
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
 
   @override
@@ -30,12 +32,14 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _subscribeToLocationUpdates();
     _listenToLiveLocations();
+    _listenToZones(); // Start listening to zones
   }
 
   @override
   void dispose() {
     _liveLocationsSubscription?.cancel();
     _positionStreamSubscription?.cancel();
+    _zonesSubscription?.cancel(); // Cancel zones subscription
     super.dispose();
   }
 
@@ -85,7 +89,10 @@ class _MapScreenState extends State<MapScreen> {
         setState(() {
           _currentPosition = LatLng(initialPosition.latitude, initialPosition.longitude);
           _updateCurrentUserMarker();
-          _goToCurrentLocation(initial: true); 
+          // Only go to current location if no zones have set the initial map center
+          if (_initialMapCenter == null) {
+            _goToCurrentLocation(initial: true); 
+          }
         });
       }
     } catch (e) {
@@ -128,6 +135,19 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
+  void _listenToZones() {
+    _zonesSubscription = FirebaseFirestore.instance
+        .collection('zones') // Assuming a 'zones' collection
+        .snapshots()
+        .listen((QuerySnapshot snapshot) {
+      if (mounted) {
+        _updateZoneCircles(snapshot.docs);
+      }
+    }, onError: (error) {
+      debugPrint("MapScreen: Error listening to zones: $error");
+    });
+  }
+
   void _updateLiveMarkers(List<QueryDocumentSnapshot> docs) {
     Set<Marker> newLiveMarkers = {};
     User? currentUser = _firebaseAuth.currentUser;
@@ -164,6 +184,89 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  void _updateZoneCircles(List<QueryDocumentSnapshot> docs) {
+    Set<Circle> newCircles = {};
+    debugPrint('--- Starting _updateZoneCircles ---');
+    debugPrint('Number of zone documents received: ${docs.length}');
+
+    for (var doc in docs) {
+      try {
+        final data = doc.data() as Map<String, dynamic>;
+        
+        debugPrint('Zone Document ID: ${doc.id}');
+        debugPrint('Zone Data: $data');
+
+        final double? latitude = (data['latitude'] as num?)?.toDouble();
+        final double? longitude = (data['longitude'] as num?)?.toDouble();
+
+        if (latitude == null || longitude == null) {
+          debugPrint("Zone document missing latitude or longitude, skipping: ${doc.id}");
+          continue;
+        }
+
+        final LatLng center = LatLng(latitude, longitude);
+        final double radius = (data['radius'] as num?)?.toDouble() ?? 100.0; // Default to 100m
+        final String status = data['status'] ?? 'safe'; // Use 'status' field
+        final String name = data['name'] ?? doc.id; // Use name for CircleId, fallback to doc.id
+
+        debugPrint('Extracted - Latitude: $latitude, Longitude: $longitude, Radius: $radius, Status: $status, Name: $name');
+
+        Color fillColor;
+        Color strokeColor;
+        if (status == 'danger') {
+          fillColor = Colors.red.withOpacity(0.3);
+          strokeColor = Colors.red.withOpacity(0.7);
+        } else {
+          // Default to safe zone
+          fillColor = Colors.green.withOpacity(0.3);
+          strokeColor = Colors.green.withOpacity(0.7);
+        }
+
+        newCircles.add(
+          Circle(
+            circleId: CircleId(name), // Using name for CircleId
+            center: center,
+            radius: radius,
+            fillColor: fillColor,
+            strokeColor: strokeColor,
+            strokeWidth: 2,
+          ),
+        );
+        debugPrint('Circle added for ID: $name');
+
+        // Set initial map center to the first zone if not already set
+        if (_initialMapCenter == null) {
+          _initialMapCenter = center;
+          debugPrint("MapScreen: Setting _initialMapCenter to $center. Attempting to animate camera.");
+          _mapControllerCompleter.future.then((controller) {
+            if (mounted) {
+              debugPrint("MapScreen: Animating camera to initial zone center: $_initialMapCenter");
+              controller.animateCamera(CameraUpdate.newCameraPosition(
+                CameraPosition(
+                  target: _initialMapCenter!,
+                  zoom: 14.0, // A good zoom level to see a 100m radius circle
+                ),
+              ));
+            }
+          });
+        }
+
+      } catch (e) {
+        debugPrint("Error processing zone document ${doc.id}: $e");
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _circles = newCircles;
+        debugPrint('Updated _circles with ${newCircles.length} circles. Total _circles: ${_circles.length}');
+      });
+    } else {
+      debugPrint('Component not mounted, _circles not updated.');
+    }
+    debugPrint('--- Finished _updateZoneCircles ---');
+  }
+
   void _updateCurrentUserMarker() {
     if (!mounted || _currentPosition == null) return;
 
@@ -196,6 +299,16 @@ class _MapScreenState extends State<MapScreen> {
     ));
   }
 
+  Future<void> _zoomIn() async {
+    final GoogleMapController controller = await _mapControllerCompleter.future;
+    controller.animateCamera(CameraUpdate.zoomIn());
+  }
+
+  Future<void> _zoomOut() async {
+    final GoogleMapController controller = await _mapControllerCompleter.future;
+    controller.animateCamera(CameraUpdate.zoomOut());
+  }
+
   Widget _buildLegend() {
     return Container(
       padding: const EdgeInsets.all(8.0),
@@ -214,7 +327,7 @@ class _MapScreenState extends State<MapScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('Legend', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const Text('Legend', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
           const SizedBox(height: 5),
           Row(
             children: [
@@ -280,6 +393,12 @@ class _MapScreenState extends State<MapScreen> {
                   final isSmallScreen = constraints.maxWidth < 350;
                   final padding = EdgeInsets.all(isSmallScreen ? 12.0 : 20.0);
 
+                  // Determine the target for the camera and zoom level
+                  final LatLng cameraTarget = _initialMapCenter ?? _currentPosition!;
+                  final double cameraZoom = _initialMapCenter != null ? 14.0 : 12.0;
+
+                  debugPrint("GoogleMap initialCameraPosition target: $cameraTarget, zoom: $cameraZoom");
+
                   return Padding(
                     padding: padding,
                     child: Container(
@@ -290,12 +409,12 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                       child: Stack(
                         children: [
-                          if (_currentPosition != null)
+                          if (_currentPosition != null || _initialMapCenter != null) // Check both
                             GoogleMap(
                               mapType: MapType.normal,
                               initialCameraPosition: CameraPosition(
-                                target: _currentPosition!,
-                                zoom: 12.0,
+                                target: cameraTarget, // Use zone center if available
+                                zoom: cameraZoom, // Higher zoom for zones
                               ),
                               markers: _markers.union(_liveMarkers),
                               circles: _circles,
@@ -314,9 +433,32 @@ class _MapScreenState extends State<MapScreen> {
                             const Center(child: CircularProgressIndicator()),
                           
                           Positioned(
+                            top: 20,
+                            right: 20,
+                            child: FloatingActionButton(
+                              heroTag: "zoomInBtn",
+                              mini: true,
+                              onPressed: _zoomIn,
+                              child: const Icon(Icons.add),
+                              backgroundColor: Colors.white,
+                            ),
+                          ),
+                          Positioned(
+                            top: 70,
+                            right: 20,
+                            child: FloatingActionButton(
+                              heroTag: "zoomOutBtn",
+                              mini: true,
+                              onPressed: _zoomOut,
+                              child: const Icon(Icons.remove),
+                              backgroundColor: Colors.white,
+                            ),
+                          ),
+                          Positioned(
                             bottom: 20,
                             right: 20,
                             child: FloatingActionButton(
+                              heroTag: "currentLocationBtn",
                               onPressed: _goToCurrentLocation,
                               child: const Icon(Icons.my_location),
                               backgroundColor: Colors.white,

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart'; // Added for HapticFeedback
 import 'package:safesync/screens/fake_call_no_response_page.dart';
 import '../screens/fake_call_page.dart'; // Import for FakeCallPage
 import 'location_service.dart'; // Import LocationService
+import 'package:audioplayers/audioplayers.dart'; // Import audioplayers
 
 class EmergencyService {
   final BuildContext context;
@@ -13,6 +14,8 @@ class EmergencyService {
   final VoidCallback onInitiateAutoCall;
   final ValueGetter<bool> isEmergencyButtonActive;
   final ValueGetter<bool> isAutoCallActive; // New parameter
+  final VoidCallback onEmergencyConfirmed; // New callback
+  final AudioPlayer _audioPlayer = AudioPlayer(); // AudioPlayer instance
 
   EmergencyService({
     required this.context,
@@ -22,7 +25,17 @@ class EmergencyService {
     required this.onInitiateAutoCall,
     required this.isEmergencyButtonActive,
     required this.isAutoCallActive, // Require it in the constructor
+    required this.onEmergencyConfirmed, // Require it in the constructor
   });
+
+  Future<void> _playRingtone() async {
+    await _audioPlayer.setReleaseMode(ReleaseMode.loop);
+    await _audioPlayer.play(AssetSource('sounds/operator.mp3')); // Assuming you have an emergency_alarm.mp3 in assets/sounds
+  }
+
+  Future<void> _stopRingtone() async {
+    await _audioPlayer.stop();
+  }
 
   Future<void> handleEmergencyTrigger({bool force = false}) async {
     if (!isEmergencyButtonActive() && !force) {
@@ -41,10 +54,14 @@ class EmergencyService {
     debugPrint("EmergencyService: Found nearest station: '$stationName'");
 
     bool? confirmed;
+    
+    // Play ringtone before showing the dialog
+    _playRingtone();
+
     try {
       if (!Navigator.of(context).mounted) return;
 
-      HapticFeedback.heavyImpact();
+      HapticFeedback.heavyImpact(); // Initial heavy impact for attention
       confirmed = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
@@ -57,6 +74,8 @@ class EmergencyService {
               TextButton(
                 child: const Text('No'),
                 onPressed: () {
+                  HapticFeedback.lightImpact(); // Light vibration for 'No'
+                  _stopRingtone(); // Stop ringtone on 'No'
                   if (Navigator.of(dialogContext).canPop()) {
                     Navigator.of(dialogContext).pop(false);
                   }
@@ -65,6 +84,8 @@ class EmergencyService {
               TextButton(
                 child: const Text('Yes'),
                 onPressed: () {
+                  HapticFeedback.vibrate(); // Default vibration for 'Yes'
+                  _stopRingtone(); // Stop ringtone on 'Yes'
                   if (Navigator.of(dialogContext).canPop()) {
                     Navigator.of(dialogContext).pop(true);
                   }
@@ -76,6 +97,7 @@ class EmergencyService {
       ).timeout(const Duration(seconds: 10));
     } on TimeoutException {
       debugPrint("EmergencyService: Confirmation timed out.");
+      _stopRingtone(); // Stop ringtone if timeout occurs
       if (isAutoCallActive()) {
         debugPrint("EmergencyService: Auto Call is ON. Initiating fake call with operator voice.");
         if (Navigator.of(context).mounted &&
@@ -100,11 +122,13 @@ class EmergencyService {
       return;
     } catch (e) {
       debugPrint("EmergencyService: Error showing dialog: $e");
+      _stopRingtone(); // Stop ringtone if any error occurs
       return;
     }
 
     if (confirmed == true) {
       debugPrint("EmergencyService: Emergency sequence ACTIVATED by user!");
+      onEmergencyConfirmed(); // Call the new callback here
       if (Navigator.of(context).mounted) {
         Navigator.push(
             context,
