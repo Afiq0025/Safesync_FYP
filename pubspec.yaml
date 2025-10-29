@@ -115,3 +115,4 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/sounds/operator.mp3
+    - assets/sounds/emergency.mp3

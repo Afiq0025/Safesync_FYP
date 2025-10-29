@@ -30,7 +30,7 @@ class EmergencyService {
 
   Future<void> _playRingtone() async {
     await _audioPlayer.setReleaseMode(ReleaseMode.loop);
-    await _audioPlayer.play(AssetSource('sounds/operator.mp3')); // Assuming you have an emergency_alarm.mp3 in assets/sounds
+    await _audioPlayer.play(AssetSource('sounds/emergency.mp3')); // Assuming you have an emergency_alarm.mp3 in assets/sounds
   }
 
   Future<void> _stopRingtone() async {
