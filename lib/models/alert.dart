@@ -7,6 +7,7 @@ class Alert {
   final String priority;
   final String status;
   final Timestamp timestamp;
+  final String title;
 
   Alert({
     required this.id,
@@ -15,6 +16,7 @@ class Alert {
     required this.priority,
     required this.status,
     required this.timestamp,
+    required this.title,
   });
 
   factory Alert.fromFirestore(DocumentSnapshot doc) {
@@ -26,6 +28,7 @@ class Alert {
       priority: data['priority'] ?? 'medium',
       status: data['status'] ?? 'active',
       timestamp: data['timestamp'] ?? Timestamp.now(),
+      title: data['title'] ?? '',
     );
   }
 }

@@ -6,6 +6,9 @@ import 'package:safesync/screens/community/discussion_detail_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:safesync/models/alert.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:safesync/main.dart'; // Import main.dart to access the global plugin instance
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({Key? key}) : super(key: key);
@@ -18,6 +21,8 @@ class _ReportScreenState extends State<ReportScreen> {
   int _currentTab = 0; // 0: Report, 1: Alert, 2: Discussion
   final TextEditingController _discussionController = TextEditingController();
   final TextEditingController _discussionTitleController = TextEditingController();
+  List<Alert> _previousAlerts = []; // Added to keep track of previous alerts
+  // REMOVED: final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
   @override
   Widget build(BuildContext context) {
@@ -187,25 +192,70 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Widget _buildAlertTab() {
-    return ListView(
-      padding: const EdgeInsets.all(15),
-      children: [
-        _buildAlertCard(
-          'ACTIVE ALERT',
-          'High Risk Area - Jalan Sentosa',
-          'Multiple break-in reports in past 48 hours. Avoid area after 10 PM.',
-          'High',
-          ['Break-in', 'Night Patrol'],
-        ),
-        _buildAlertCard(
-          'COMMUNITY NOTICE',
-          'Neighborhood Watch Meeting',
-          'Emergency meeting scheduled for tomorrow 8 PM at Community Hall.',
-          'Medium',
-          ['Meeting', 'Community'],
-        ),
-      ],
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('alerts')
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(child: Text('Something went wrong! ${snapshot.error}'));
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          _previousAlerts = []; // Clear previous alerts if no data
+          return const Center(child: Text('No alerts yet.'));
+        }
+
+        final currentAlerts = snapshot.data!.docs
+            .map((doc) => Alert.fromFirestore(doc))
+            .toList();
+
+        // Logic to detect new alerts and show notification
+        _checkForNewAlerts(currentAlerts);
+        _previousAlerts = currentAlerts; // Update previous alerts
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(15),
+          itemCount: currentAlerts.length,
+          itemBuilder: (context, index) {
+            final alert = currentAlerts[index];
+            return _buildAlertCard(alert);
+          },
+        );
+      },
     );
+  }
+
+  void _checkForNewAlerts(List<Alert> currentAlerts) {
+    if (_previousAlerts.isNotEmpty) {
+      final newAlerts = currentAlerts.where((alert) =>
+          !_previousAlerts.any((prevAlert) => prevAlert.id == alert.id)).toList();
+
+      for (var alert in newAlerts) {
+        _showNotification(alert);
+      }
+    }
+  }
+
+  void _showNotification(Alert alert) {
+    flutterLocalNotificationsPlugin.show(
+    0,
+       'New Alert: ${alert.priority} Priority',
+       '${alert.message} at ${alert.location}',
+       NotificationDetails(android: AndroidNotificationDetails(
+         'channel_id',
+         'channel_name',
+         channelDescription: 'channel_description',
+         importance: Importance.max,
+         priority: Priority.high,
+       )),
+       payload: alert.id,
+     );
   }
 
   void _showDiscussionBottomSheet(User? currentUser) {
@@ -492,13 +542,13 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _buildAlertCard(String title, String location, String description, String urgency, List<String> tags) {
+  Widget _buildAlertCard(Alert alert) {
     return Card(
       margin: const EdgeInsets.only(bottom: 15),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
       ),
-      color: urgency == 'High' ? Colors.red[50] : Colors.orange[50],
+      color: alert.priority.toLowerCase() == 'high' ? Colors.red[50] : Colors.orange[50],
       child: Padding(
         padding: const EdgeInsets.all(15),
         child: Column(
@@ -509,7 +559,7 @@ class _ReportScreenState extends State<ReportScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    title,
+                    alert.title,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -521,11 +571,11 @@ class _ReportScreenState extends State<ReportScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: urgency == 'High' ? Colors.red : Colors.orange,
+                    color: alert.priority.toLowerCase() == 'high' ? Colors.red : Colors.orange,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    urgency,
+                    alert.priority,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12,
@@ -537,7 +587,7 @@ class _ReportScreenState extends State<ReportScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              location,
+              alert.location,
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 color: Colors.red,
@@ -546,13 +596,22 @@ class _ReportScreenState extends State<ReportScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              description,
+              alert.message, // Moved alert.message here as description
+              style: const TextStyle(
+                fontFamily: 'YourCustomFont',
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _formatTimestamp(alert.timestamp),
               style: const TextStyle(
                 fontFamily: 'YourCustomFont',
               ),
             ),
             const SizedBox(height: 12),
-            Wrap(
+            // Tags from alert model are not directly available, so omitting for now
+            // You might need to add a 'tags' field to your Alert model or handle differently
+            /*Wrap(
               spacing: 8,
               children: tags.map((tag) => Chip(
                 label: Text(
@@ -564,7 +623,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 backgroundColor: Colors.white,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               )).toList(),
-            ),
+            ),*/
           ],
         ),
       ),
@@ -591,7 +650,7 @@ class _ReportScreenState extends State<ReportScreen> {
                       backgroundColor: const Color(0xFFE1D5E7),
                       child: Text(
                         post.author.isNotEmpty ? post.author[0].toUpperCase() : 'A',
-                        style: const TextStyle(color: Colors.black87),
+                        style: const TextStyle(color: Colors.black87), // Ensure contrast
                       ),
                     ),
                   ],
