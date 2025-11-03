@@ -5,12 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
 import 'package:safesync/services/permission_service.dart';
+import 'package:gal/gal.dart'; // Added for saving to gallery
 
 class VideoRecordingService {
   CameraController? _cameraController;
   final ValueNotifier<bool> isRecording = ValueNotifier<bool>(false);
   final ValueNotifier<bool> isReady = ValueNotifier<bool>(false);
   Timer? _recordingTimer;
+
+  // Public getter to expose the CameraController
+  CameraController? get cameraController => _cameraController;
 
   Future<void> initCamera() async {
     if (isReady.value || _cameraController != null) return; // Already initialized or in process
@@ -115,7 +119,22 @@ class VideoRecordingService {
       // Move the file to the new path
       await tempVideoFile.saveTo(newPath);
 
-      debugPrint("✅ Video saved successfully to: $newPath");
+      debugPrint("✅ Video saved successfully to app-specific directory: $newPath");
+
+      // Save to gallery using gal package
+      debugPrint("VideoRecordingService: Attempting to save to gallery using Gal. newPath: $newPath");
+      final bool hasGalleryAccess = await Gal.requestAccess();
+      if (hasGalleryAccess) {
+        debugPrint("VideoRecordingService: Gal permission granted. Calling Gal.putVideo(newPath).");
+        try {
+          await Gal.putVideo(newPath);
+          debugPrint("✅ Video also saved to gallery.");
+        } catch (galError) {
+          debugPrint("❌ Error saving video to gallery with Gal.putVideo: $galError");
+        }
+      } else {
+        debugPrint("⚠️ Gal permission not granted, video not saved to gallery.");
+      }
 
     } catch (e) {
       debugPrint("Error during video stop or save: $e");

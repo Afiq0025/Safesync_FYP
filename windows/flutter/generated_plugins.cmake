@@ -10,6 +10,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
   firebase_auth
   firebase_core
+  gal
   geolocator_windows
   permission_handler_windows
   speech_to_text_windows
