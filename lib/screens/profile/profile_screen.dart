@@ -484,7 +484,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               () => _saveField('medicalConditions', _medicalConditionsController, (val) => _isEditingMedicalConditions = val),
             ),
             const SizedBox(height: 12),
-            _buildExpandableEditableSection(
+             _buildExpandableEditableSection(
               'Medications',
               'medications',
               _medicationsController,
