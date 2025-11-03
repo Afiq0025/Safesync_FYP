@@ -1,5 +1,6 @@
 package com.fyp.safesync.safesync
 
+import android.os.Bundle
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -11,6 +12,13 @@ class MainActivity : FlutterActivity() {
         private const val CHANNEL_NAME = "com.fyp.safesync.safesync/heartrate"
         var channel: MethodChannel? = null
         private const val TAG = "MainActivity"
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (intent.getBooleanExtra("from_background", false)) {
+            moveTaskToBack(true)
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
