@@ -95,37 +95,27 @@ class VideoRecordingService {
 
     try {
       final XFile tempVideoFile = await _cameraController!.stopVideoRecording();
-      debugPrint("VideoRecordingService: Stopped recording, now saving to app-specific directory...");
-      isRecording.value = false; // Set recording to false after stopping
+      debugPrint("VideoRecordingService: Stopped recording, now saving file...");
 
-      // Get the directory for app-specific files on external storage.
+      // Save the file
       final List<Directory>? externalDirs = await getExternalStorageDirectories();
       if (externalDirs == null || externalDirs.isEmpty) {
-          debugPrint("❌ Video save failed. Could not find external storage directory.");
-          return;
+        debugPrint("❌ Video save failed. Could not find external storage directory.");
+        return; // Exits function, finally block will still run.
       }
       final Directory appDir = externalDirs.first;
-
-      // Create a 'SafeSync' subdirectory if it doesn't exist
       final Directory saveDir = Directory(path.join(appDir.path, 'SafeSync'));
       if (!await saveDir.exists()) {
         await saveDir.create(recursive: true);
       }
-
-      // Create a new path for the video file
       final String fileName = '${DateTime.now().millisecondsSinceEpoch}.mp4';
       final String newPath = path.join(saveDir.path, fileName);
-
-      // Move the file to the new path
       await tempVideoFile.saveTo(newPath);
-
       debugPrint("✅ Video saved successfully to app-specific directory: $newPath");
 
-      // Save to gallery using gal package
-      debugPrint("VideoRecordingService: Attempting to save to gallery using Gal. newPath: $newPath");
+      // Save to gallery
       final bool hasGalleryAccess = await Gal.requestAccess();
       if (hasGalleryAccess) {
-        debugPrint("VideoRecordingService: Gal permission granted. Calling Gal.putVideo(newPath).");
         try {
           await Gal.putVideo(newPath);
           debugPrint("✅ Video also saved to gallery.");
@@ -135,17 +125,11 @@ class VideoRecordingService {
       } else {
         debugPrint("⚠️ Gal permission not granted, video not saved to gallery.");
       }
-
     } catch (e) {
       debugPrint("Error during video stop or save: $e");
-      isRecording.value = false;
     } finally {
-      debugPrint("VideoRecordingService: Disposing camera and re-initializing for next use.");
-      isReady.value = false;
-      await _cameraController?.dispose();
-      _cameraController = null;
-      // Re-initialize the camera for the next use.
-      initCamera();
+      isRecording.value = false;
+      debugPrint("VideoRecordingService: Recording stopped. Ready for next use.");
     }
   }
 
