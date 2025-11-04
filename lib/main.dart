@@ -23,6 +23,9 @@ import 'screens/profile/profile_screen.dart';
 import 'screens/home/pair_smart_devices.dart';
 import 'screens/map/map_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter_background_service_android/flutter_background_service_android.dart';
+
 
 // Services
 import 'services/fall_detection_service.dart';
@@ -38,7 +41,7 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
 
-void main() {
+Future<void> main() async {
   runZonedGuarded<Future<void>>(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
@@ -62,12 +65,78 @@ void main() {
         onDidReceiveNotificationResponse: (NotificationResponse notificationResponse) async {
       // Handle notification tapped logic here
     });
-
+    await initializeService();
     runApp(const SafeSyncApp());
   }, (error, stackTrace) {
     debugPrint('App Error: $error', wrapWidth: 1024);
     debugPrint('Stack Trace: $stackTrace', wrapWidth: 1024);
   });
+}
+
+Future<void> initializeService() async {
+  final service = FlutterBackgroundService();
+  await service.configure(
+    androidConfiguration: AndroidConfiguration(
+      onStart: onStart,
+      isForegroundMode: true,
+      autoStart: true,
+    ),
+    iosConfiguration: IosConfiguration(
+      autoStart: true,
+      onForeground: onStart,
+      onBackground: onIosBackground,
+    ),
+  );
+  service.startService();
+}
+
+@pragma('vm:entry-point')
+void onStart(ServiceInstance service) async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final VoiceRecognitionService voiceRecognitionService = VoiceRecognitionService(
+    onEmergencyPhraseDetected: () {
+      service.invoke('emergency_phrase_detected');
+    },
+    onStatusChanged: (isListening) {
+      service.invoke(
+        'update',
+        {
+          "is_listening": isListening,
+        },
+      );
+    },
+  );
+
+  voiceRecognitionService.initSpeech();
+
+  service.on('toggleListening').listen((event) {
+    if (voiceRecognitionService.isListening) {
+      voiceRecognitionService.stopListening();
+    } else {
+      voiceRecognitionService.startListening();
+    }
+  });
+
+  if (service is AndroidServiceInstance) {
+    service.on('setAsForeground').listen((event) {
+      service.setAsForegroundService();
+    });
+
+    service.on('setAsBackground').listen((event) {
+      service.setAsBackgroundService();
+    });
+  }
+
+  service.on('stopService').listen((event) {
+    service.stopSelf();
+  });
+}
+
+@pragma('vm:entry-point')
+Future<bool> onIosBackground(ServiceInstance service) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  return true;
 }
 
 class SafeSyncApp extends StatelessWidget {
@@ -231,9 +300,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
+    final service = FlutterBackgroundService();
     if (state == AppLifecycleState.resumed) {
       debugPrint("MainScreen: App resumed, reloading data.");
       _loadData();
+       service.invoke("setAsForeground");
+    } else {
+      service.invoke("setAsBackground");
     }
   }
 
@@ -476,7 +549,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     'call': false,      
     'location': false,  
   };
-  late VoiceRecognitionService _voiceRecognitionService;
   late FallDetectionService _fallDetectionService;
   late ShakeDetectionService _shakeDetectionService;
   late EmergencyService _emergencyService;
@@ -514,19 +586,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       getMedicalConditions: () => widget.medicalConditions,
       getMedications: () => widget.medications,
     );
-
-    // Initialize Voice Recognition Service
-    _voiceRecognitionService = VoiceRecognitionService(
-      onEmergencyPhraseDetected: _handleEmergencyPhrase,
-      onStatusChanged: (isListening) {
-        if (mounted) {
-          setState(() {
-            buttonPressed['voice'] = isListening;
-          });
-        }
-      },
-    );
-    _voiceRecognitionService.initSpeech();
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -553,6 +612,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       isEmergencyModeActive: () => buttonPressed['emergency'] ?? false,
     );
     _shakeDetectionService.initAccelerometer();
+
+    FlutterBackgroundService().on('update').listen((event) {
+      final isListening = event!['is_listening'] as bool? ?? false;
+      if(mounted) {
+        setState(() {
+          buttonPressed['voice'] = isListening;
+        });
+      }
+    });
+    FlutterBackgroundService().on('emergency_phrase_detected').listen((event) {
+      _handleEmergencyPhrase();
+    });
   }
 
   @override
@@ -629,7 +700,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   void dispose() {
     _fallDetectionService.dispose();
     _shakeDetectionService.dispose();
-    _voiceRecognitionService.dispose();
     _videoRecordingService.dispose();
     if (_locationService.isCurrentlySharing()) {
       debugPrint("HomeScreen disposing: Stopping location sharing.");
@@ -654,10 +724,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         debugPrint("HomeScreen: Emergency Mode Toggled. Is Active: ${buttonPressed['emergency']}");
       });
     } else if (buttonKey == 'voice') {
-      if (_voiceRecognitionService.isListening) {
-        _voiceRecognitionService.stopListening();
-      } else {
-        _voiceRecognitionService.startListening();
+      final service = FlutterBackgroundService();
+      var isRunning = await service.isRunning();
+      if(isRunning){
+        service.invoke("toggleListening");
       }
     } else if (buttonKey == 'location') { // Specific logic for 'location' button
       setState(() {
