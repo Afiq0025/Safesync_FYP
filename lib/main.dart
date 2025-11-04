@@ -11,7 +11,7 @@ import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'services/voice_recogniton_services.dart';
+import 'services/voice_recognition_services.dart';
 import 'package:safesync/screens/community/report_screen.dart';
 import 'package:safesync/screens/emergency/emergency_contacts.dart';
 import 'package:safesync/widgets/pulse_icon.dart';

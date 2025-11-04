@@ -51,8 +51,11 @@ class VoiceRecognitionService {
       listenOptions: SpeechListenOptions(
         partialResults: true,
         cancelOnError: false, // Keep listening even on errors
-        onDevice: true, // Use on-device recognition if possible
-        listenMode: ListenMode.dictation, // Better for keyword spotting
+        // onDevice: false uses network recognition, which is more accurate
+        // (especially for non-English keywords) but requires an internet connection.
+        onDevice: false,
+        // .search mode is generally better for short keywords than .dictation.
+        listenMode: ListenMode.search,
       ),
     );
     _isListening = true;
@@ -74,8 +77,11 @@ class VoiceRecognitionService {
 
     if (_isHandlingEmergency) return; // Don't process if in cooldown
 
+    // Using a regex to match whole words is more robust.
+    // This prevents "helper" from triggering "help".
     for (final keyword in _emergencyKeywords) {
-      if (recognizedWords.contains(keyword)) {
+      final regex = RegExp(r'\b' + keyword + r'\b');
+      if (regex.hasMatch(recognizedWords)) {
         debugPrint("EMERGENCY PHRASE '$keyword' DETECTED! Starting cooldown.");
         _isHandlingEmergency = true;
         onEmergencyPhraseDetected();

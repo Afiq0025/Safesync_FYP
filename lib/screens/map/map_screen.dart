@@ -15,7 +15,7 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   final Completer<GoogleMapController> _mapControllerCompleter = Completer();
-  
+
   Set<Marker> _markers = {};
   Set<Marker> _liveMarkers = {}; // Markers for other users
   Set<Circle> _circles = {};
@@ -71,16 +71,16 @@ class _MapScreenState extends State<MapScreen> {
         return;
       }
     }
-    
+
     if (permission == LocationPermission.deniedForever) {
       debugPrint('Location permissions are permanently denied, we cannot request permissions.');
       if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Location permissions are permanently denied. Please enable them in your phone settings.'),
-          ));
-        }
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Location permissions are permanently denied. Please enable them in your phone settings.'),
+        ));
+      }
       return;
-    } 
+    }
 
     // Get the initial position and move the camera for a fast first view
     try {
@@ -91,7 +91,7 @@ class _MapScreenState extends State<MapScreen> {
           _updateCurrentUserMarker();
           // Only go to current location if no zones have set the initial map center
           if (_initialMapCenter == null) {
-            _goToCurrentLocation(initial: true); 
+            _goToCurrentLocation(initial: true);
           }
         });
       }
@@ -101,25 +101,25 @@ class _MapScreenState extends State<MapScreen> {
 
     // Subscribe to continuous location updates
     _positionStreamSubscription = Geolocator.getPositionStream().listen(
-      (Position position) {
-        if (mounted) {
-          setState(() {
-            _currentPosition = LatLng(position.latitude, position.longitude);
-            _updateCurrentUserMarker();
-          });
+            (Position position) {
+          if (mounted) {
+            setState(() {
+              _currentPosition = LatLng(position.latitude, position.longitude);
+              _updateCurrentUserMarker();
+            });
+          }
+        },
+        onError: (e) {
+          debugPrint('Error in location stream: $e');
         }
-      },
-      onError: (e) {
-        debugPrint('Error in location stream: $e');
-      }
     );
   }
-  
+
   void _listenToLiveLocations() {
     User? currentUser = _firebaseAuth.currentUser;
     if (currentUser == null) {
-        debugPrint("MapScreen: No current user for listening to live locations.");
-        return;
+      debugPrint("MapScreen: No current user for listening to live locations.");
+      return;
     }
 
     _liveLocationsSubscription = FirebaseFirestore.instance
@@ -156,7 +156,7 @@ class _MapScreenState extends State<MapScreen> {
       try {
         final data = doc.data() as Map<String, dynamic>;
         final String userId = data['userId'];
-        
+
         // Don't draw a marker for the current user from the live collection,
         // as we are drawing it based on the real-time device location stream.
         if (userId == currentUser?.uid) continue;
@@ -184,6 +184,21 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
+  // --- NEW HELPER FUNCTION ---
+  // Add this function to parse the hex color string from Firestore
+  Color _hexToColor(String hexString, {Color defaultColor = Colors.grey}) {
+    try {
+      final buffer = StringBuffer();
+      if (hexString.length == 6 || hexString.length == 7) buffer.write('ff');
+      buffer.write(hexString.replaceFirst('#', ''));
+      return Color(int.parse(buffer.toString(), radix: 16));
+    } catch (e) {
+      debugPrint('Error parsing hex color $hexString: $e');
+      return defaultColor;
+    }
+  }
+
+  // --- UPDATED FUNCTION ---
   void _updateZoneCircles(List<QueryDocumentSnapshot> docs) {
     Set<Circle> newCircles = {};
     debugPrint('--- Starting _updateZoneCircles ---');
@@ -192,32 +207,49 @@ class _MapScreenState extends State<MapScreen> {
     for (var doc in docs) {
       try {
         final data = doc.data() as Map<String, dynamic>;
-        
+
         debugPrint('Zone Document ID: ${doc.id}');
         debugPrint('Zone Data: $data');
 
-        final double? latitude = (data['latitude'] as num?)?.toDouble();
-        final double? longitude = (data['longitude'] as num?)?.toDouble();
+        // --- FIX 1: Robust latitude/longitude reading ---
+        // Read 'latitude' OR 'lat'. Fallback to null.
+        final double? latitude = (data['latitude'] as num?)?.toDouble() ?? (data['lat'] as num?)?.toDouble();
+        // Read 'longitude' OR 'lng'. Fallback to null.
+        final double? longitude = (data['longitude'] as num?)?.toDouble() ?? (data['lng'] as num?)?.toDouble();
+
 
         if (latitude == null || longitude == null) {
-          debugPrint("Zone document missing latitude or longitude, skipping: ${doc.id}");
+          debugPrint("Zone document missing latitude/lat or longitude/lng, skipping: ${doc.id}");
           continue;
         }
 
         final LatLng center = LatLng(latitude, longitude);
-        final double radius = (data['radius'] as num?)?.toDouble() ?? 100.0; // Default to 100m
-        final String status = data['status'] ?? 'safe'; // Use 'status' field
-        final String name = data['name'] ?? doc.id; // Use name for CircleId, fallback to doc.id
 
-        debugPrint('Extracted - Latitude: $latitude, Longitude: $longitude, Radius: $radius, Status: $status, Name: $name');
+        // --- FIX 2: Handle radius (assuming DB value is in kilometers) ---
+        // Google Maps circles use METERS. Your DB has radius: 1.
+        // This code assumes '1' means '1 kilometer'.
+        final double radiusInKm = (data['radius'] as num?)?.toDouble() ?? 0.1; // Default 0.1 km (100m)
+        final double radiusInMeters = radiusInKm * 1000.0;
+
+        final String status = data['status'] ?? 'safe'; // e.g., "high-risk"
+        final String name = data['name'] ?? doc.id; // e.g., "Batu Buruk"
+
+        // --- FIX 3: Use the 'color' field from your database ---
+        final String colorString = data['color'] as String? ?? '#808080'; // Default to grey if null
+        final Color zoneColor = _hexToColor(colorString);
+
+        debugPrint('Extracted - Lat: $latitude, Lng: $longitude, Radius: $radiusInMeters (from $radiusInKm km), Status: $status, Name: $name, Color: $colorString');
 
         Color fillColor;
         Color strokeColor;
-        if (status == 'danger') {
-          fillColor = Colors.red.withOpacity(0.3);
-          strokeColor = Colors.red.withOpacity(0.7);
+
+        // --- FIX 1 (continued): Check for 'high-risk' ---
+        if (status == 'high-risk' || status == 'danger') {
+          // Use the color from the database for high-risk zones
+          fillColor = zoneColor.withOpacity(0.3);
+          strokeColor = zoneColor.withOpacity(0.7);
         } else {
-          // Default to safe zone
+          // Default to green for 'safe' or other statuses
           fillColor = Colors.green.withOpacity(0.3);
           strokeColor = Colors.green.withOpacity(0.7);
         }
@@ -226,7 +258,7 @@ class _MapScreenState extends State<MapScreen> {
           Circle(
             circleId: CircleId(name), // Using name for CircleId
             center: center,
-            radius: radius,
+            radius: radiusInMeters, // Use the converted meters value
             fillColor: fillColor,
             strokeColor: strokeColor,
             strokeWidth: 2,
@@ -244,7 +276,8 @@ class _MapScreenState extends State<MapScreen> {
               controller.animateCamera(CameraUpdate.newCameraPosition(
                 CameraPosition(
                   target: _initialMapCenter!,
-                  zoom: 14.0, // A good zoom level to see a 100m radius circle
+                  // Zoom 14 is good for a 1km radius circle
+                  zoom: 14.0,
                 ),
               ));
             }
@@ -266,12 +299,14 @@ class _MapScreenState extends State<MapScreen> {
     }
     debugPrint('--- Finished _updateZoneCircles ---');
   }
+  // --- END OF UPDATED FUNCTIONS ---
+
 
   void _updateCurrentUserMarker() {
     if (!mounted || _currentPosition == null) return;
 
     setState(() {
-       _markers.removeWhere((m) => m.markerId.value == 'current_location');
+      _markers.removeWhere((m) => m.markerId.value == 'current_location');
       _markers.add(
         Marker(
           markerId: const MarkerId('current_location'),
@@ -288,7 +323,7 @@ class _MapScreenState extends State<MapScreen> {
     if (_currentPosition == null) {
       // If position is somehow null, try to refetch it.
       await _subscribeToLocationUpdates();
-      return;
+      if (_currentPosition == null) return; // Still null after refetch, just exit.
     }
     final GoogleMapController controller = await _mapControllerCompleter.future;
     controller.animateCamera(CameraUpdate.newCameraPosition(
@@ -352,7 +387,7 @@ class _MapScreenState extends State<MapScreen> {
               const Text('Safe Zone', style: TextStyle(fontSize: 12)),
             ],
           ),
-           const SizedBox(height: 4),
+          const SizedBox(height: 4),
           Row(
             children: [
               Icon(Icons.circle, color: Colors.red.withOpacity(0.7), size: 20),
@@ -394,7 +429,8 @@ class _MapScreenState extends State<MapScreen> {
                   final padding = EdgeInsets.all(isSmallScreen ? 12.0 : 20.0);
 
                   // Determine the target for the camera and zoom level
-                  final LatLng cameraTarget = _initialMapCenter ?? _currentPosition!;
+                  // Wait until either the first zone is loaded OR the user's location is found
+                  final LatLng? cameraTarget = _initialMapCenter ?? _currentPosition;
                   final double cameraZoom = _initialMapCenter != null ? 14.0 : 12.0;
 
                   debugPrint("GoogleMap initialCameraPosition target: $cameraTarget, zoom: $cameraZoom");
@@ -409,18 +445,18 @@ class _MapScreenState extends State<MapScreen> {
                       ),
                       child: Stack(
                         children: [
-                          if (_currentPosition != null || _initialMapCenter != null) // Check both
+                          if (cameraTarget != null) // Only build map if we have a location
                             GoogleMap(
                               mapType: MapType.normal,
                               initialCameraPosition: CameraPosition(
-                                target: cameraTarget, // Use zone center if available
-                                zoom: cameraZoom, // Higher zoom for zones
+                                target: cameraTarget, // Use zone center or current position
+                                zoom: cameraZoom,
                               ),
                               markers: _markers.union(_liveMarkers),
                               circles: _circles,
                               onMapCreated: (GoogleMapController controller) {
                                 if (!_mapControllerCompleter.isCompleted) {
-                                   _mapControllerCompleter.complete(controller);
+                                  _mapControllerCompleter.complete(controller);
                                 }
                               },
                               zoomControlsEnabled: false,
@@ -430,8 +466,10 @@ class _MapScreenState extends State<MapScreen> {
                               mapToolbarEnabled: false,
                             )
                           else
-                            const Center(child: CircularProgressIndicator()),
-                          
+                            const Center(child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B6B)),
+                            )),
+
                           Positioned(
                             top: 20,
                             right: 20,
@@ -464,7 +502,7 @@ class _MapScreenState extends State<MapScreen> {
                               backgroundColor: Colors.white,
                             ),
                           ),
-                           Positioned(
+                          Positioned(
                             bottom: 20,
                             left: 20,
                             child: _buildLegend(),
