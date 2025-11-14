@@ -7,8 +7,6 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:safesync/models/alert.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:safesync/main.dart'; // Import main.dart to access the global plugin instance
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({Key? key}) : super(key: key);
@@ -21,8 +19,6 @@ class _ReportScreenState extends State<ReportScreen> {
   int _currentTab = 0; // 0: Report, 1: Alert, 2: Discussion
   final TextEditingController _discussionController = TextEditingController();
   final TextEditingController _discussionTitleController = TextEditingController();
-  List<Alert> _previousAlerts = []; // Added to keep track of previous alerts
-  // REMOVED: final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
   @override
   Widget build(BuildContext context) {
@@ -207,17 +203,12 @@ class _ReportScreenState extends State<ReportScreen> {
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          _previousAlerts = []; // Clear previous alerts if no data
           return const Center(child: Text('No alerts yet.'));
         }
 
         final currentAlerts = snapshot.data!.docs
             .map((doc) => Alert.fromFirestore(doc))
             .toList();
-
-        // Logic to detect new alerts and show notification
-        _checkForNewAlerts(currentAlerts);
-        _previousAlerts = currentAlerts; // Update previous alerts
 
         return ListView.builder(
           padding: const EdgeInsets.all(15),
@@ -229,33 +220,6 @@ class _ReportScreenState extends State<ReportScreen> {
         );
       },
     );
-  }
-
-  void _checkForNewAlerts(List<Alert> currentAlerts) {
-    if (_previousAlerts.isNotEmpty) {
-      final newAlerts = currentAlerts.where((alert) =>
-          !_previousAlerts.any((prevAlert) => prevAlert.id == alert.id)).toList();
-
-      for (var alert in newAlerts) {
-        _showNotification(alert);
-      }
-    }
-  }
-
-  void _showNotification(Alert alert) {
-    flutterLocalNotificationsPlugin.show(
-    0,
-       'New Alert: ${alert.priority} Priority',
-       '${alert.message} at ${alert.location}',
-       NotificationDetails(android: AndroidNotificationDetails(
-         'channel_id',
-         'channel_name',
-         channelDescription: 'channel_description',
-         importance: Importance.max,
-         priority: Priority.high,
-       )),
-       payload: alert.id,
-     );
   }
 
   void _showDiscussionBottomSheet(User? currentUser) {
