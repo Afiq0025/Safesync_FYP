@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // <<<--- ADD THIS IMPORT
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:safesync/services/bluetooth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -17,16 +18,12 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _errorMessage;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance; // Added Firestore instance
-
-  // The logic for _didExtractArgs and related variables for data from signup navigation
-  // is removed as user data will now be fetched from Firestore upon successful login.
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final BluetoothService _bluetoothService = BluetoothService();
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Previous argument extraction logic is removed.
-    // User data is now fetched from Firestore in _signIn().
   }
 
   Future<void> _signIn() async {
@@ -39,6 +36,9 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
+      // Disconnect any existing Bluetooth connection before signing in a new user
+      await _bluetoothService.disconnectDevice();
+
       final String email = _emailController.text.trim();
       final String password = _passwordController.text.trim();
 
@@ -52,7 +52,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (user != null) {
         debugPrint("Firebase Login successful: Auth UID: ${user.uid}, Email: ${user.email}");
 
-        // Fetch user details from Cloud Firestore
         DocumentSnapshot userDoc = await _firestore.collection('users').doc(user.uid).get();
 
         if (userDoc.exists) {
@@ -66,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
               arguments: {
                 'name': userData['fullName'] ?? (user.displayName ?? 'User'),
                 'phoneNumber': userData['phoneNumber'] ?? 'N/A',
-                'email': user.email, // Use email from Auth as primary
+                'email': user.email,
                 'address': userData['address'] ?? 'N/A',
                 'bloodType': userData['bloodType'] ?? 'N/A',
                 'allergies': userData['allergies'] ?? 'N/A',
@@ -81,14 +80,11 @@ class _LoginScreenState extends State<LoginScreen> {
             setState(() {
               _errorMessage = "User details not found. Please sign up or contact support.";
             });
-            // Optionally sign out if data is missing, to force a clean state
-            // await _auth.signOut();
           }
         }
       }
     } on FirebaseAuthException catch (e) {
       String message;
-      // Modern Firebase Auth often uses 'invalid-credential' for both user-not-found and wrong-password
       if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential' || e.code == 'INVALID_LOGIN_CREDENTIALS') {
         message = 'Invalid email or password.';
       } else {
@@ -255,7 +251,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   if (_errorMessage != null)
                                     Padding(
                                       padding: const EdgeInsets.only(bottom: 12),
-                                      child: Center( // Center the error message
+                                      child: Center(
                                         child: Text(
                                           _errorMessage!,
                                           style: TextStyle(
@@ -294,13 +290,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                   SizedBox(height: isSmallScreen ? 12.0 : 16.0),
-                                  Center( // Center the "Don't have an account?" text
+                                  Center(
                                     child: Wrap(
                                       alignment: WrapAlignment.center,
                                       crossAxisAlignment: WrapCrossAlignment.center,
                                       children: [
                                         Text(
-                                          "Don\'t have an account? ",
+                                          "Don't have an account? ",
                                           style: TextStyle(fontSize: fontSize),
                                         ),
                                         GestureDetector(

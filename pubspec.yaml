@@ -24,6 +24,7 @@ dependencies:
   #authentication
   firebase_auth: ^6.0.2
   cloud_firestore: ^6.0.1
+  flutter_reactive_ble: ^5.4.0
 
   # State Management
   provider: ^6.0.5

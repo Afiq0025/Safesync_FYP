@@ -250,8 +250,8 @@ class _MapScreenState extends State<MapScreen> {
           strokeColor = zoneColor.withOpacity(0.7);
         } else {
           // Default to green for 'safe' or other statuses
-          fillColor = Colors.green.withOpacity(0.3);
-          strokeColor = Colors.green.withOpacity(0.7);
+          fillColor = Colors.orangeAccent.withOpacity(0.3);
+          strokeColor = Colors.orangeAccent.withOpacity(0.7);
         }
 
         newCircles.add(
@@ -382,9 +382,9 @@ class _MapScreenState extends State<MapScreen> {
           const SizedBox(height: 4),
           Row(
             children: [
-              Icon(Icons.circle, color: Colors.green.withOpacity(0.7), size: 20),
+              Icon(Icons.circle, color: Colors.orange.withOpacity(0.7), size: 20),
               const SizedBox(width: 8),
-              const Text('Safe Zone', style: TextStyle(fontSize: 12)),
+              const Text('Mild Zone', style: TextStyle(fontSize: 12)),
             ],
           ),
           const SizedBox(height: 4),

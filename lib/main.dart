@@ -11,6 +11,9 @@ import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:safesync/services/bluetooth_service.dart';
+
 import 'services/voice_recognition_services.dart';
 import 'package:safesync/screens/community/report_screen.dart';
 import 'package:safesync/screens/emergency/emergency_contacts.dart';
@@ -20,7 +23,6 @@ import 'screens/auth/signup_screen.dart';
 import 'screens/home/smartwatch_detail.dart';
 import 'screens/settings/recording_settings.dart';
 import 'screens/profile/profile_screen.dart';
-import 'screens/home/pair_smart_devices.dart';
 import 'screens/map/map_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -36,7 +38,6 @@ import 'services/video_recording_service.dart';
 // Initialize flutter_local_notifications plugin instance globally
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
-
 
 void main() {
   runZonedGuarded<Future<void>>(() async {
@@ -65,8 +66,8 @@ void main() {
 
     runApp(const SafeSyncApp());
   }, (error, stackTrace) {
-    debugPrint('App Error: $error', wrapWidth: 1024);
-    debugPrint('Stack Trace: $stackTrace', wrapWidth: 1024);
+    debugPrint('App Error: \$error', wrapWidth: 1024);
+    debugPrint('Stack Trace: \$stackTrace', wrapWidth: 1024);
   });
 }
 
@@ -91,7 +92,6 @@ class SafeSyncApp extends StatelessWidget {
         '/main': (context) => const MainScreen(),
         '/smartwatch': (context) => const SmartwatchDetailScreen(),
         '/recording-settings': (context) => const RecordingSettingsScreen(),
-        '/pair-smart-devices': (context) => const PairSmartDevicesScreen(),
         '/profile': (context) {
           final args = ModalRoute.of(context)!.settings.arguments
               as Map<String, dynamic>?;
@@ -139,11 +139,11 @@ class _SplashScreenState extends State<SplashScreen> {
         debugPrint('SplashScreen: User is currently signed out! Navigating to /login.');
         Navigator.pushReplacementNamed(context, '/login');
       } else {
-        debugPrint('SplashScreen: User is signed in! UID: ${user.uid}. Navigating to /main.');
+        debugPrint('SplashScreen: User is signed in! UID: \${user.uid}. Navigating to /main.');
         Navigator.pushReplacementNamed(context, '/main');
       }
     }, onError: (error) {
-      debugPrint('SplashScreen: Error in authStateChanges stream: $error');
+      debugPrint('SplashScreen: Error in authStateChanges stream: \$error');
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/login');
       }
@@ -204,12 +204,66 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   String _heartStatus = "Connecting...";
   DateTime? _lastUpdated;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final BluetoothService _bluetoothService = BluetoothService();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _setupMethodChannelHandler();
+    _autoConnectToDevice();
+  }
+
+  Future<void> _autoConnectToDevice() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _heartStatus = "Not Logged In";
+      });
+      return;
+    }
+
+    if (_bluetoothService.isConnected) {
+      debugPrint("MainScreen: Bluetooth device already connected.");
+      setState(() {
+        _heartStatus = "Watch Connected";
+      });
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final userSpecificKey = 'paired_devices_\${user.uid}';
+    final pairedDeviceIds = prefs.getStringList(userSpecificKey) ?? [];
+
+    if (pairedDeviceIds.isEmpty) {
+      debugPrint("MainScreen: No paired devices found for this user.");
+      setState(() {
+        _heartStatus = "No Watch Paired";
+      });
+      return;
+    }
+
+    final lastPairedDeviceId = pairedDeviceIds.last;
+    debugPrint("MainScreen: Found paired device ID. Attempting to connect...");
+    setState(() {
+      _heartStatus = "Connecting...";
+    });
+    try {
+      await _bluetoothService.connectToDevice(lastPairedDeviceId);
+      if (mounted) {
+        setState(() {
+          _heartStatus = "Watch Connected"; // Optimistic update
+        });
+        debugPrint("MainScreen: Connection process initiated for \$lastPairedDeviceId.");
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _heartStatus = "Connection Failed";
+        });
+        debugPrint("MainScreen: Failed to initiate connection: \$e");
+      }
+    }
   }
 
   @override
@@ -225,6 +279,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _bluetoothService.disconnectDevice();
     super.dispose();
   }
 
@@ -249,7 +304,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       return;
     }
 
-    debugPrint("MainScreen (_loadData): Reloading data from Auth/Firestore for UID: ${currentUser.uid}");
+    debugPrint("MainScreen (_loadData): Reloading data from Auth/Firestore for UID: \${currentUser.uid}");
     Map<String, dynamic> firestoreData = {};
     User? freshCurrentUser = currentUser;
     try {
@@ -268,10 +323,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       if (userDoc.exists) {
         firestoreData = userDoc.data() as Map<String, dynamic>;
       } else {
-        debugPrint("MainScreen (_loadData): Firestore document not found for UID: ${freshCurrentUser.uid}.");
+        debugPrint("MainScreen (_loadData): Firestore document not found for UID: \${freshCurrentUser.uid}.");
       }
     } catch (e) {
-      debugPrint("MainScreen (_loadData): Error fetching from Auth/Firestore: $e");
+      debugPrint("MainScreen (_loadData): Error fetching from Auth/Firestore: \$e");
     }
 
     if (mounted && freshCurrentUser != null) {
@@ -291,7 +346,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       _medicalConditions = userData['medicalConditions'] as String? ?? _medicalConditions;
       _medications = userData['medications'] as String? ?? _medications;
     });
-    debugPrint("MainScreen (_updateStateWithUserData): State updated from $source. Name: $_name, Phone: $_phoneNumber");
+    debugPrint("MainScreen (_updateStateWithUserData): State updated from \$source. Name: \$_name, Phone: \$_phoneNumber");
   }
 
   void _setupMethodChannelHandler() {
@@ -316,7 +371,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           }
           break;
         default:
-          debugPrint('MainScreen: Unknown method ${call.method}');
+          debugPrint('MainScreen: Unknown method \${call.method}');
       }
     });
   }
@@ -342,6 +397,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         lastWatchUpdate: _lastUpdated,
         currentBatteryLevel: _batteryLevel,
         onProfileScreenClosed: requestReload,
+        onReconnect: _autoConnectToDevice,
       ),
       const MapScreen(),
       const EmergencyContactsScreen(),
@@ -445,6 +501,7 @@ class HomeScreen extends StatefulWidget {
   final DateTime? lastWatchUpdate;
   final int currentBatteryLevel;
   final VoidCallback? onProfileScreenClosed;
+  final VoidCallback? onReconnect;
 
   const HomeScreen({
     super.key,
@@ -461,6 +518,7 @@ class HomeScreen extends StatefulWidget {
     this.lastWatchUpdate,
     required this.currentBatteryLevel,
     this.onProfileScreenClosed,
+    this.onReconnect,
   });
 
   @override
@@ -485,6 +543,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late AutoCallService _autoCallService;
   final VideoRecordingService _videoRecordingService = VideoRecordingService();
   bool _didLoadLockscreenStateInitial = false;
+  static const _bluetoothPlatform = MethodChannel('com.fyp.safesync.safesync/bluetooth');
+
 
   @override
   void initState() {
@@ -565,6 +625,98 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
+  Future<bool> _requestBluetoothConnectPermission() async {
+    try {
+      return await _bluetoothPlatform.invokeMethod('requestBluetoothConnectPermission');
+    } on PlatformException catch (e) {
+      debugPrint("Failed to request bluetooth permission: '\${e.message}'.");
+      return false;
+    }
+  }
+
+  Future<void> _openBluetoothSettings() async {
+    try {
+      await _bluetoothPlatform.invokeMethod('openBluetoothSettings');
+    } on PlatformException catch (e) {
+      debugPrint("Failed to open bluetooth settings: '\${e.message}'.");
+    }
+  }
+
+  Future<bool> _isBluetoothEnabled() async {
+    try {
+      final bool isEnabled = await _bluetoothPlatform.invokeMethod('isBluetoothEnabled');
+      return isEnabled;
+    } on PlatformException catch (e) {
+      debugPrint("Failed to check if bluetooth is enabled: '\${e.message}'.");
+      return false;
+    }
+  }
+
+  Future<void> _checkBluetoothAndPair() async {
+    if (!mounted) return;
+    if (await _requestBluetoothConnectPermission()) {
+      if (!mounted) return;
+      if (await _isBluetoothEnabled()) {
+        _openBluetoothSettings();
+      } else {
+        _showBluetoothDisabledDialog();
+      }
+    } else {
+      if (!mounted) return;
+      _showPermissionDeniedDialog();
+    }
+  }
+
+  void _showPermissionDeniedDialog() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Permission Denied'),
+          content: const Text('Bluetooth permission is required to pair devices. Please enable it in the app settings.'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('OK'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showBluetoothDisabledDialog() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Bluetooth Disabled'),
+          content: const Text('Bluetooth is not enabled. Do you want to go to settings to enable it?'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('No'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: const Text('Yes'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _openBluetoothSettings();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
   void _handleVigorousShake() {
     if (mounted) {
       debugPrint("HomeScreen: Vigorous shake detected. Triggering emergency confirmation.");
@@ -584,15 +736,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _loadLockscreenState() async {
     debugPrint("HomeScreen: _loadLockscreenState START");
-    debugPrint("HomeScreen: _lockscreenService instance hash: ${_lockscreenService.hashCode}");
+    debugPrint("HomeScreen: _lockscreenService instance hash: \${_lockscreenService.hashCode}");
 
     bool initiallyEnabled = await _lockscreenService.isLockscreenAccessEnabled();
-    debugPrint("HomeScreen: _loadLockscreenState - Value from isLockscreenAccessEnabled(): $initiallyEnabled");
+    debugPrint("HomeScreen: _loadLockscreenState - Value from isLockscreenAccessEnabled(): \$initiallyEnabled");
 
     if (mounted) {
       setState(() {
         _isLockscreenAccessEnabled = initiallyEnabled;
-        debugPrint("HomeScreen: _loadLockscreenState - setState completed. _isLockscreenAccessEnabled is now: $_isLockscreenAccessEnabled");
+        debugPrint("HomeScreen: _loadLockscreenState - setState completed. _isLockscreenAccessEnabled is now: \$_isLockscreenAccessEnabled");
       });
     } else {
       debugPrint("HomeScreen: _loadLockscreenState - Component not mounted before setState. Aborting.");
@@ -643,7 +795,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       setState(() {
         _lastFallTime = fallTime;
       });
-      debugPrint("HomeScreen: Fall detected at: $fallTime. UI should update.");
+      debugPrint("HomeScreen: Fall detected at: \$fallTime. UI should update.");
     }
   }
 
@@ -651,7 +803,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (buttonKey == 'emergency') {
       setState(() {
         buttonPressed['emergency'] = !buttonPressed['emergency']!;
-        debugPrint("HomeScreen: Emergency Mode Toggled. Is Active: ${buttonPressed['emergency']}");
+        debugPrint("HomeScreen: Emergency Mode Toggled. Is Active: \${buttonPressed['emergency']}");
       });
     } else if (buttonKey == 'voice') {
       if (_voiceRecognitionService.isListening) {
@@ -673,7 +825,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     } else if (buttonKey == 'call') { // Specific logic for 'call' button
       setState(() {
         buttonPressed[buttonKey] = !buttonPressed[buttonKey]!;
-        debugPrint("HomeScreen: Auto Call Toggled. Is Active: ${buttonPressed['call']}");
+        debugPrint("HomeScreen: Auto Call Toggled. Is Active: \${buttonPressed['call']}");
       });
     }
   }
@@ -686,6 +838,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     String lastFallDisplayStatus = _lastFallTime != null ? DateFormat.yMd().add_jm().format(_lastFallTime!) : "Never";
 
+    bool canReconnect = widget.currentHeartStatus != "Watch Connected" && widget.currentHeartStatus != "Connecting...";
+
     return Scaffold(
       backgroundColor: const Color(0xFFF36060),
       body: SafeArea(
@@ -697,7 +851,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   GestureDetector(
-                    onTap: () async { 
+                    onTap: () async {
                       await Navigator.pushNamed(
                         context,
                         '/profile',
@@ -746,15 +900,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               const SizedBox(height: 5),
               const PulseIcon(icon: Icons.favorite, pulseColor: Colors.white70, iconColor: Colors.redAccent, iconSize: 40, innerSize: 45, pulseSize: 116, pulseCount: 3),
               const SizedBox(height: 10),
-              Text(widget.currentHeartRate > 0 ? '${widget.currentHeartRate} BpM' : '-- BpM', style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white)),
-              Text('Heart Rate - ${widget.currentHeartStatus}', style: const TextStyle(fontSize: 14, color: Colors.white70)),
-              if (widget.lastWatchUpdate != null) Padding(padding: const EdgeInsets.only(top: 4.0), child: Text('Last Watch Update: ${_formatDateTimeLocal(widget.lastWatchUpdate!)}', style: const TextStyle(fontSize: 10, color: Colors.white60))),
+              Text(
+                  widget.currentHeartRate > 0
+                      ? '${widget.currentHeartRate} BpM'
+                      : '-- BpM',
+                  style: const TextStyle(
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white
+                  )
+              ),
+              Text(
+                  'Heart Rate - ${widget.currentHeartStatus}',
+                  style: const TextStyle(fontSize: 14, color: Colors.white70)),
+              if (widget.lastWatchUpdate != null)
+                Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Text(
+                        'Last Watch Update: ${_formatDateTimeLocal(widget.lastWatchUpdate!)}',
+                        style: const TextStyle(fontSize: 10, color: Colors.white60)
+                    )
+                ),
               const SizedBox(height: 20),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _buildActivityIndicator(Icons.emergency_recording_rounded, "Automatic\nRecording", onTap: () => Navigator.pushNamed(context, '/recording-settings')),
-                   if (_videoRecordingService.isRecording.value)
+                  _buildActivityIndicator(Icons.watch_outlined, "Pair\nDevice", onTap: _checkBluetoothAndPair),
+                  if (canReconnect)
+                    if (_videoRecordingService.isRecording.value)
                     _buildActivityIndicator(Icons.videocam, "Recording..."),
                   if (!_videoRecordingService.isReady.value && !_videoRecordingService.isRecording.value)
                     _buildActivityIndicator(Icons.videocam_off, "Camera not ready"),
@@ -797,12 +971,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       child: AnimatedContainer(duration: const Duration(milliseconds: 200), height: 80, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: isPressed ? const Color(0xFFDD0000) : Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))]),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Icon(icon, color: isPressed ? Colors.white : const Color(0xFFDD0000), size: 20), 
-            const Spacer(), 
+            Icon(icon, color: isPressed ? Colors.white : const Color(0xFFDD0000), size: 20),
+            const Spacer(),
             if (isPressed) Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle))
-          ]), 
-          const SizedBox(height: 4), 
-          Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: isPressed ? Colors.white : Colors.black)), 
+          ]),
+          const SizedBox(height: 4),
+          Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: isPressed ? Colors.white : Colors.black)),
           Text(subtitle, style: TextStyle(fontSize: 10, color: isPressed ? Colors.white70 : Colors.grey[600]), maxLines: 1, overflow: TextOverflow.ellipsis)
         ]),
       ),
@@ -810,7 +984,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildStatusCard(String title, String status) {
-    return Container(width: double.infinity, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))]), child: Text('$title : $status', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)));
+    return
+      Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [BoxShadow(color: Colors.black12,
+                  blurRadius: 4, offset: Offset(0, 2))]),
+          child: Text(
+              '$title : $status',
+              style: const TextStyle(fontSize: 14,
+                  fontWeight: FontWeight.w500)
+          )
+      );
   }
 
   Widget _buildLockscreenCard() {
