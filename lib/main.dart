@@ -548,6 +548,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final VideoRecordingService _videoRecordingService = VideoRecordingService();
   bool _didLoadLockscreenStateInitial = false;
   static const _bluetoothPlatform = MethodChannel('com.fyp.safesync.safesync/bluetooth');
+  final int _heartRateThreshold = 140;
+  final Duration _autoTriggerCooldown = Duration(minutes: 1);
+  DateTime? _lastAutoTrigger;
+
+  @override
+  void didUpdateWidget(HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.currentHeartRate > _heartRateThreshold &&
+        (oldWidget.currentHeartRate <= _heartRateThreshold)) {
+      _maybeAutoTriggerEmergency();
+    }
+  }
+
+  void _maybeAutoTriggerEmergency() {
+    final now = DateTime.now();
+    if (_lastAutoTrigger != null &&
+        now.difference(_lastAutoTrigger!) < _autoTriggerCooldown) {
+      debugPrint('Auto-emergency suppressed by cooldown.');
+      return;
+    }
+    _lastAutoTrigger = now;
+    debugPrint('Auto-emergency: heart rate exceeded $_heartRateThreshold. Triggering emergency.');
+    _emergencyService.handleEmergencyTrigger(force: true);
+  }
 
 
   @override
