@@ -42,12 +42,12 @@ class VoiceRecognitionService {
   }
 
   void startListening() {
-    if (!_speechEnabled || _isListening) return;
+    if (!_speechEnabled || _speechToText.isListening) return;
     debugPrint("VoiceRecognitionService: Starting to listen...");
     _speechToText.listen(
       onResult: _onSpeechResult,
       listenFor: const Duration(minutes: 5),
-      pauseFor: const Duration(seconds: 20),
+      pauseFor: const Duration(seconds: 5),
       listenOptions: SpeechListenOptions(
         partialResults: true,
         cancelOnError: false, // Keep listening even on errors

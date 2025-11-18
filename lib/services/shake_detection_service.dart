@@ -14,7 +14,7 @@ class ShakeDetectionService {
 
   bool _isShakeCooldownActive = false; // Cooldown for *subsequent* shakes
   Timer? _shakeCooldownTimer;
-  static const Duration _shakeCooldownDuration = Duration(seconds: 10); // Cooldown period
+  static const Duration _shakeCooldownDuration = Duration(seconds: 5); // Cooldown period
 
   // Callbacks and getters
   final VoidCallback onShakeDetectedVigorous;

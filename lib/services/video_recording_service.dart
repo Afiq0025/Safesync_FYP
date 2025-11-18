@@ -57,7 +57,8 @@ class VideoRecordingService {
       return;
     }
 
-    // Lazily initialize camera if not ready
+    // Lazily initialize camera if not ready. This will now run on every
+    // recording after the first one has completed and been disposed.
     if (!isReady.value) {
       debugPrint("VideoRecordingService: Camera not ready. Initializing now...");
       await initCamera();
@@ -129,7 +130,14 @@ class VideoRecordingService {
       debugPrint("Error during video stop or save: $e");
     } finally {
       isRecording.value = false;
-      debugPrint("VideoRecordingService: Recording stopped. Ready for next use.");
+      debugPrint("VideoRecordingService: Recording stopped. Disposing controller to ensure clean state for next use.");
+      // Dispose the controller and reset state.
+      // This ensures a fresh controller is created for the next recording.
+      if (_cameraController != null) {
+        await _cameraController!.dispose();
+        _cameraController = null;
+      }
+      isReady.value = false;
     }
   }
 
