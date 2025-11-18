@@ -39,9 +39,19 @@ class MainActivity : FlutterActivity() {
         Log.d(TAG, "MethodChannel '$HEARTRATE_CHANNEL' initialized in MainActivity.")
 
         if (HeartRateBuffer.pending.isNotEmpty()) {
-            Log.d(TAG, "Flushing ${HeartRateBuffer.pending.size} buffered heart rate events.")
+            Log.d(TAG, "Flushing ${HeartRateBuffer.pending.size} buffered events.")
             HeartRateBuffer.pending.forEach { event ->
-                channel?.invokeMethod("heartRateUpdate", event)
+                try {
+                    if (event.containsKey("battery")) {
+                        channel?.invokeMethod("batteryUpdate", event)
+                        Log.d(TAG, "Flushed buffered battery event: $event")
+                    } else {
+                        channel?.invokeMethod("heartRateUpdate", event)
+                        Log.d(TAG, "Flushed buffered heart rate event: $event")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error invoking method for buffered event: $event", e)
+                }
             }
             HeartRateBuffer.pending.clear()
         }

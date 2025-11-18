@@ -73,6 +73,10 @@
                 <action android:name="com.google.android.gms.wearable.DATA_CHANGED"/>
                 <data android:scheme="wear" android:host="*" android:pathPrefix="/heartRate"/>
             </intent-filter>
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED"/>
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/batteryLevel"/>
+            </intent-filter>
         </service>
 
         <!-- Google Maps API Key (replace value with your actual key) -->

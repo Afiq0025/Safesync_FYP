@@ -1,7 +1,6 @@
 package com.fyp.safesync.safesync
 
 import android.util.Log
-import android.widget.Toast
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.DataMapItem
@@ -9,7 +8,7 @@ import com.google.android.gms.wearable.WearableListenerService
 import android.os.Handler
 import android.os.Looper
 
-// Buffer heart rate data if Flutter isn't ready yet
+// Buffer heart rate / battery data if Flutter isn't ready yet
 object HeartRateBuffer {
     val pending = mutableListOf<Map<String, Any>>()
 }
@@ -31,46 +30,50 @@ class DataLayerListenerService : WearableListenerService() {
 
             if (event.type == DataEvent.TYPE_CHANGED) {
                 val dataItem = event.dataItem
-                if (dataItem.uri.path.equals("/heartRate", ignoreCase = true)) {
-                    try {
-                        val dataMap = DataMapItem.fromDataItem(dataItem).dataMap
-                        val bpm = dataMap.getInt("bpm")
-                        val timestamp = dataMap.getLong("timestamp")
-                        Log.e(TAG, "Received BPM from watch: $bpm, Timestamp: $timestamp")
+                val path = dataItem.uri.path ?: ""
+                try {
+                    val dataMap = DataMapItem.fromDataItem(dataItem).dataMap
+                    when {
+                        path.equals("/heartRate", ignoreCase = true) -> {
+                            val bpm = dataMap.getInt("bpm")
+                            val timestamp = dataMap.getLong("timestamp")
+                            Log.e(TAG, "Received BPM from watch: $bpm, Timestamp: $timestamp")
 
-                        val heartRateData = mapOf("bpm" to bpm, "timestamp" to timestamp)
+                            val heartRateData = mapOf("bpm" to bpm, "timestamp" to timestamp)
 
-                        Handler(Looper.getMainLooper()).post {
-                            MainActivity.channel?.let {
-                                Log.e(TAG, "SUCCESS: Sending BPM to Flutter via MethodChannel")
-                                it.invokeMethod("heartRateUpdate", heartRateData)
-                            } ?: run {
-                                Log.w(TAG, "MethodChannel not ready. Buffering data.")
-                                HeartRateBuffer.pending.add(heartRateData)
+                            Handler(Looper.getMainLooper()).post {
+                                MainActivity.channel?.let {
+                                    Log.e(TAG, "SUCCESS: Sending BPM to Flutter via MethodChannel")
+                                    it.invokeMethod("heartRateUpdate", heartRateData)
+                                } ?: run {
+                                    Log.w(TAG, "MethodChannel not ready. Buffering heart rate data.")
+                                    HeartRateBuffer.pending.add(heartRateData)
+                                }
                             }
                         }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error processing heart rate data item: ${dataItem.uri}", e)
-                    }
-                } else if (dataItem.uri.path.equals("/batteryLevel", ignoreCase = true)) {
-                    try {
-                        val dataMap = DataMapItem.fromDataItem(dataItem).dataMap
-                        val battery = dataMap.getInt("battery")
-                        val timestamp = dataMap.getLong("timestamp")
-                        Log.e(TAG, "Received Battery from watch: $battery%, Timestamp: $timestamp")
+                        path.equals("/batteryLevel", ignoreCase = true) -> {
+                            val battery = dataMap.getInt("battery")
+                            val timestamp = dataMap.getLong("timestamp")
+                            Log.e(TAG, "Received Battery from watch: $battery%, Timestamp: $timestamp")
 
-                        val batteryData = mapOf("battery" to battery, "timestamp" to timestamp)
+                            val batteryData = mapOf("battery" to battery, "timestamp" to timestamp)
 
-                        Handler(Looper.getMainLooper()).post {
-                            MainActivity.channel?.let {
-                                it.invokeMethod("batteryUpdate", batteryData)
+                            Handler(Looper.getMainLooper()).post {
+                                MainActivity.channel?.let {
+                                    Log.e(TAG, "SUCCESS: Sending Battery to Flutter via MethodChannel")
+                                    it.invokeMethod("batteryUpdate", batteryData)
+                                } ?: run {
+                                    Log.w(TAG, "MethodChannel not ready. Buffering battery data.")
+                                    HeartRateBuffer.pending.add(batteryData)
+                                }
                             }
                         }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error processing battery data item: ${dataItem.uri}", e)
+                        else -> {
+                            Log.w(TAG, "Received data item with UNEXPECTED PATH: $path")
+                        }
                     }
-                } else {
-                    Log.w(TAG, "Received data item with UNEXPECTED PATH: ${dataItem.uri.path}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing data item: ${dataItem.uri}", e)
                 }
             } else if (event.type == DataEvent.TYPE_DELETED) {
                 Log.w(TAG, "Received DELETED data event: ${event.dataItem.uri}")
