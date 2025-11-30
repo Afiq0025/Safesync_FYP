@@ -10,6 +10,7 @@ class PermissionService {
       Permission.storage, // General storage
       Permission.videos,  // Specific to videos for scoped storage
       Permission.audio,   // For audio recording
+      Permission.notification // Request notification permission
     ].request();
 
     // You can optionally check the status of each permission
@@ -39,6 +40,14 @@ class PermissionService {
     if (statuses[Permission.storage]!.isPermanentlyDenied || statuses[Permission.videos]!.isPermanentlyDenied) {
       // The user has permanently denied the permission. Open app settings.
       openAppSettings();
+    }
+  }
+
+  static Future<void> requestNotificationPermission() async {
+    final status = await Permission.notification.request();
+    if (status.isPermanentlyDenied) {
+      // The user has permanently denied the permission. Open app settings.
+      await openAppSettings();
     }
   }
 }
